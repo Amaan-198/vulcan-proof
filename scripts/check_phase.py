@@ -343,7 +343,69 @@ def check_phase_2() -> list[tuple[str, bool, str]]:
     return results
 
 
-CHECKS: dict[int, Check] = {0: check_phase_0, 1: check_phase_1, 2: check_phase_2}
+def check_phase_3() -> list[tuple[str, bool, str]]:
+    """Validate Phase-3 model, support, and Arm-5 artifacts."""
+    phase_dir = ROOT / "outputs" / "phase3"
+    metrics_path = phase_dir / "metrics.json"
+    report_path = ROOT / "outputs" / "phase3_REPORT.md"
+    results: list[tuple[str, bool, str]] = [
+        ("phase3 directory exists", phase_dir.is_dir(), str(phase_dir)),
+        ("phase3 metrics exists", metrics_path.is_file(), str(metrics_path)),
+        ("phase3 report exists", report_path.is_file(), str(report_path)),
+    ]
+    if metrics_path.is_file():
+        try:
+            metrics = _json(metrics_path)
+            required = ("stage_a", "stage_b", "stage_c", "defensibility", "materialisation", "lorenz", "paired_arm5_minus_arm4")
+            results.append(("phase3 metrics contain model sections", all(name in metrics for name in required), str(metrics_path)))
+            results.append(("stage A metrics contain calibration fields", all(name in metrics.get("stage_a", {}) for name in ("pr_auc", "brier", "ece")), str(metrics_path)))
+            results.append(("support metrics are present", "support" in metrics.get("defensibility", {}), str(metrics_path)))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            results.append(("phase3 metrics are valid JSON", False, f"{type(exc).__name__}: {exc}"))
+    seeds = tuple(range(1, int(P["run.n_seeds_sweep"]) + 1))
+    kappas = (0.0, float(P["sim.kappa.canonical"]))
+    missing: list[str] = []
+    invalid: list[str] = []
+    max_rss = float(P["run.max_peak_rss_gb"]) * 1024
+    for kappa in kappas:
+        for seed in seeds:
+            directory = phase_dir / "smoke" / f"kappa_{str(kappa).replace('-', 'm').replace('.', 'p')}" / f"seed_{seed}"
+            manifest_path = directory / "manifest.json"
+            for path in (manifest_path, directory / "observed_orders.parquet", directory / "outcome_arm5.parquet"):
+                if not path.is_file():
+                    missing.append(str(path))
+            if manifest_path.is_file():
+                try:
+                    manifest = _json(manifest_path)
+                    valid = (
+                        manifest.get("phase") == "phase3"
+                        and manifest.get("params_sha256") == P.sha256
+                        and manifest.get("seed") == seed
+                        and manifest.get("kappa") == kappa
+                        and float(manifest.get("peak_rss_mb", math.inf)) <= max_rss
+                    )
+                    if not valid:
+                        invalid.append(str(manifest_path))
+                except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+                    invalid.append(str(manifest_path))
+    results.append(("phase3 smoke artifacts exist", not missing, "; ".join(missing[:3])))
+    results.append(("phase3 smoke manifests valid", not invalid, "; ".join(invalid[:3])))
+    canonical_missing: list[str] = []
+    canonical_kappa = float(P["sim.kappa.canonical"])
+    for seed in seeds:
+        directory = phase_dir / "canonical" / f"kappa_{str(canonical_kappa).replace('-', 'm').replace('.', 'p')}" / f"seed_{seed}"
+        for path in (directory / "manifest.json", directory / "observed_orders.parquet", directory / "outcome_arm5.parquet"):
+            if not path.is_file():
+                canonical_missing.append(str(path))
+    results.append(("phase3 canonical artifacts exist", not canonical_missing, "; ".join(canonical_missing[:3])))
+    if report_path.is_file():
+        report = report_path.read_text(encoding="utf-8")
+        required = ("Lorenz table", "Arm 5 − Arm 4 net", "Support pairs", str(P["report.simulator_footer"]))
+        results.append(("phase3 report contains required sections", all(item in report for item in required), str(report_path)))
+    return results
+
+
+CHECKS: dict[int, Check] = {0: check_phase_0, 1: check_phase_1, 2: check_phase_2, 3: check_phase_3}
 
 
 def main() -> None:
