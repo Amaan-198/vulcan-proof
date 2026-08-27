@@ -3,6 +3,8 @@ data/*
 !data/.gitkeep
 outputs/*
 !outputs/.gitkeep
+!outputs/*/
+outputs/*/*
 !outputs/**/manifest.json
 !outputs/theta.json
 __pycache__/

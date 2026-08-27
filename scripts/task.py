@@ -11,10 +11,12 @@ Every subcommand refuses to run unless sys.prefix is inside <repo>/.venv.
 """
 from __future__ import annotations
 import importlib, importlib.metadata as md, pathlib, subprocess, sys
+import os
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 VENV = ROOT / ".venv"
 ALWAYS_TESTS = ["tests/test_params.py", "tests/test_ev_reference.py", "tests/test_claims.py"]
+os.environ.setdefault("PYTHONUTF8", "1")
 
 
 def _in_venv() -> None:
@@ -57,21 +59,28 @@ def lint() -> None:
 
 def test() -> None:
     _in_venv()
-    _run([sys.executable, "-m", "pytest", "-q", *[t for t in ALWAYS_TESTS if (ROOT / t).exists()]])
+    _run([sys.executable, "-m", "pytest", "-q", "--basetemp", str(ROOT / "outputs" / ".pytest_tmp"), *[t for t in ALWAYS_TESTS if (ROOT / t).exists()]])
 
 
 def check_phase(n: str) -> None:
     _in_venv()
     lint()
     tests = [t for t in ALWAYS_TESTS if (ROOT / t).exists()]
-    extra = {"3": ["tests/test_firewall.py", "tests/test_repro.py"], "4": ["tests/test_firewall.py", "tests/test_repro.py"],
-             "5": ["tests/test_firewall.py"]}.get(n, [])
+    extra = {
+        "0": ["tests/test_seeds.py", "tests/test_manifest.py", "tests/test_phase0.py"],
+        "3": ["tests/test_firewall.py", "tests/test_repro.py"],
+        "4": ["tests/test_firewall.py", "tests/test_repro.py"],
+        "5": ["tests/test_firewall.py"],
+    }.get(n, [])
     tests += [t for t in extra if (ROOT / t).exists()]
     for k in range(int(n) + 1):
         p = f"tests/test_phase{k}.py"
         if (ROOT / p).exists():
             tests.append(p)
-    _run([sys.executable, "-m", "pytest", "-q", *tests])
+    # Phase-specific tests can also appear in ``extra``.  Preserve order while
+    # avoiding duplicate collection (Phase 0 previously ran test_phase0 twice).
+    tests = list(dict.fromkeys(tests))
+    _run([sys.executable, "-m", "pytest", "-q", "--basetemp", str(ROOT / "outputs" / ".pytest_tmp"), *tests])
     _run([sys.executable, str(ROOT / "scripts" / "check_phase.py"), n])
 
 
