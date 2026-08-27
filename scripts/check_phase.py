@@ -510,6 +510,39 @@ def check_phase_4() -> list[tuple[str, bool, str]]:
     return results
 
 
+def check_phase_5() -> list[tuple[str, bool, str]]:
+    """Validate the Phase-5 API, demo script, report, and built UI."""
+    api_dir = ROOT / "vulcan_proof" / "api"
+    ui_dir = ROOT / "vulcan_proof" / "ui"
+    output_dir = ROOT / "outputs" / "phase5"
+    script_path = output_dir / "demo_script.json"
+    report_path = ROOT / "outputs" / "phase5_REPORT.md"
+    results: list[tuple[str, bool, str]] = [
+        ("phase5 API package exists", (api_dir / "main.py").is_file(), str(api_dir)),
+        ("phase5 UI source exists", (ui_dir / "src" / "main.jsx").is_file(), str(ui_dir)),
+        ("phase5 UI bundle exists", (ui_dir / "dist" / "index.html").is_file(), str(ui_dir / "dist")),
+        ("phase5 demo script exists", script_path.is_file(), str(script_path)),
+        ("phase5 report exists", report_path.is_file(), str(report_path)),
+    ]
+    if script_path.is_file():
+        try:
+            payload = _json(script_path)
+            beats = payload.get("beats", [])
+            beat_numbers = [int(item["beat"]) for item in beats]
+            results.append(("demo script contains eight ordered beats", beat_numbers == list(range(1, 9)), str(script_path)))
+            results.append(("demo script exposes its evidence mode", payload.get("mode") in {"smoke_only", "extended_validation"}, str(script_path)))
+            deferred_copy = "Production-scale defense-only evidence is deferred; smoke validation is available."
+            deferred_present = any(item.get("copy") == deferred_copy for item in beats if isinstance(item, dict))
+            if not (ROOT / "outputs" / "phase4").is_dir():
+                results.append(("deferred validation fallback is present", deferred_present, str(script_path)))
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            results.append(("demo script is valid JSON", False, f"{type(exc).__name__}: {exc}"))
+    if report_path.is_file():
+        report = report_path.read_text(encoding="utf-8")
+        results.append(("phase5 report lists fallback status", "Fallback" in report and "Demo mode" in report, str(report_path)))
+    return results
+
+
 def _phase4_ranked_paths(max_rank: int) -> list[str]:
     """Return rank-qualified paths without importing sweep code in the checker."""
     paths: list[str] = []
@@ -527,7 +560,7 @@ def _phase4_ranked_paths(max_rank: int) -> list[str]:
     return paths
 
 
-CHECKS: dict[int, Check] = {0: check_phase_0, 1: check_phase_1, 2: check_phase_2, 3: check_phase_3, 4: check_phase_4}
+CHECKS: dict[int, Check] = {0: check_phase_0, 1: check_phase_1, 2: check_phase_2, 3: check_phase_3, 4: check_phase_4, 5: check_phase_5}
 
 
 def main() -> None:

@@ -1,0 +1,8 @@
+{
+  "name": "vulcan-proof-workspace",
+  "private": true,
+  "scripts": {
+    "dev:all": "npm --prefix vulcan_proof/ui run dev:all",
+    "build:ui": "npm --prefix vulcan_proof/ui run build"
+  }
+}

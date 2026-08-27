@@ -14,7 +14,7 @@ def test_judge_facing_claims_are_clean() -> None:
     ui = root / "vulcan_proof" / "ui" / "src"
     sweep = root / "vulcan_proof" / "sweep"
     if api.exists():
-        paths.extend(api.glob("**/*"))
+        paths.extend(path for path in api.glob("**/*") if path.suffix.lower() != ".pyc")
     if ui.exists():
         paths.extend(ui.glob("**/*"))
     if sweep.exists():
