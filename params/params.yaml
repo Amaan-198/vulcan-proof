@@ -1,0 +1,306 @@
+# =============================================================================
+# Vulcan Proof — THE parameter file. Every constant in the project lives here.
+#
+# Schema for every leaf parameter:
+#   value:  the number/string/list actually used
+#   unit:   physical unit or "ratio"/"count"/"flag"
+#   source: SPEC (design decision) | CITED:<ref> | ASSUMED (must be swept, rank required)
+#           | ASSUMED_FIXED (structural assumption deliberately not swept; the κ dial or a robustness run covers its effect)
+#           | DERIVED (output, never input)
+#   sweep:  null (never swept) | [lo, hi] | list of discrete levels
+#   rank:   sensitivity rank for Phase 4 sweep ordering (1 = first). null if not swept.
+#
+# The loader (vulcan_proof/params.py) rejects: missing fields, unknown keys, access to absent keys,
+# any parameter whose source starts with "ASSUMED" (exact tag ASSUMED) but sweep is null, and any
+# source string that is not one of the five tags (optionally followed by ":" or " — " and free text).
+# =============================================================================
+
+run:
+  master_seed:        {value: 20260826, unit: count, source: SPEC, sweep: null, rank: null}
+  n_seeds_canonical:  {value: 10, unit: count, source: SPEC, sweep: null, rank: null}
+  n_seeds_sweep:      {value: 5,  unit: count, source: SPEC, sweep: null, rank: null}
+  lgbm_threads:       {value: 4,  unit: count, source: "SPEC — part of the reproducibility identity; recorded in manifest", sweep: null, rank: null}
+  lgbm_threads_in_worker: {value: 1, unit: count, source: SPEC, sweep: null, rank: null}
+  n_orders_canonical: {value: 3000000, unit: count, source: SPEC, sweep: null, rank: null}
+  n_orders_sweep:     {value: 1000000, unit: count, source: SPEC, sweep: null, rank: null}
+  n_orders_smoke:     {value: 20000,   unit: count, source: SPEC, sweep: null, rank: null}
+  max_peak_rss_gb:    {value: 16,   unit: GB, source: "SPEC — 64 GB machine; canonical run expected 5–6 GB", sweep: null, rank: null}
+  max_canonical_wall_seconds: {value: 1200, unit: seconds, source: SPEC, sweep: null, rank: null}
+  ev_chunk_orders:    {value: 100000, unit: count, source: "SPEC — optimizer EV matrix chunk (100k × 512 × 8 B ≈ 400 MB)", sweep: null, rank: null}
+  parallel_workers:   {value: 4, unit: count, source: "SPEC — ProcessPoolExecutor over seeds; spawn-safe", sweep: null, rank: null}
+
+# ---------------------------------------------------------------------------
+econ:
+  hourly_rate:        {value: 300,  unit: INR_per_hour, source: SPEC, sweep: [100, 600], rank: 2}
+  dispute_fee:        {value: 500,  unit: INR, source: "CITED:razorpay.com/blog renegotiate-payment-gateway-pricing (₹200–750 typical; ₹1,500–8,000 global benchmarks). NOT refunded on win → prevention branch only.", sweep: [200, 1500], rank: 9}
+  ratio_damage:       {value: 0,    unit: INR, source: SPEC, sweep: [0, 1000], rank: 10}
+  prevention:
+    share_explanation: {value: 0.40, unit: ratio, source: "CITED:Chargeflow — 44% resolved by answering questions", sweep: [0.25, 0.55], rank: 11}
+    share_refund:      {value: 0.35, unit: ratio, source: "CITED:Chargeflow — 31% by refund", sweep: [0.20, 0.50], rank: 11}
+    share_replacement: {value: 0.25, unit: ratio, source: SPEC, sweep: [0.10, 0.40], rank: 11}
+    support_cost:      {value: 100,  unit: INR, source: SPEC, sweep: null, rank: null}
+    reship_cost:       {value: 150,  unit: INR, source: SPEC, sweep: null, rank: null}
+    salvage_sigma:     {value: 0.30, unit: ratio, source: SPEC, sweep: [0.10, 0.60], rank: 12}
+
+# ---------------------------------------------------------------------------
+# Evidence catalogue. presence_factor = probability the customer/artefact condition is met
+# given merchant compliance (OTP/signature need customer present; acks need a response).
+# cost_timing: cash → on compliance; seconds → on request.  api_slot = Razorpay contest-API field.
+evidence:
+  order: {value: [weight, serial, sealed, packing, geotag, otp, signature, ack, vack], unit: list, source: SPEC, sweep: null, rank: null}
+  weight:    {cash: 0,    seconds: 5,  presence_factor: 1.00, system_sent: false, window: pre_dispatch, admissible: [NAD, EB],     api_slot: others}
+  serial:    {cash: 0,    seconds: 15, presence_factor: 1.00, system_sent: false, window: pre_dispatch, admissible: [NAD, EB],     api_slot: billing_proof}
+  sealed:    {cash: 0,    seconds: 20, presence_factor: 1.00, system_sent: false, window: pre_dispatch, admissible: [NAD, EB],     api_slot: shipping_proof}
+  packing:   {cash: 0,    seconds: 30, presence_factor: 1.00, system_sent: false, window: pre_dispatch, admissible: [NAD, EB],     api_slot: others}
+  geotag:    {cash: 8,    seconds: 0,  presence_factor: 1.00, system_sent: false, window: handoff,      admissible: [NR],          api_slot: shipping_proof}
+  otp:       {cash: 25,   seconds: 0,  presence_factor: 0.90, system_sent: false, window: handoff,      admissible: [NR],          api_slot: proof_of_service}
+  signature: {cash: 40,   seconds: 0,  presence_factor: 0.90, system_sent: false, window: handoff,      admissible: [NR],          api_slot: "others:receipt_signed_by_customer"}
+  ack:       {cash: 0.30, seconds: 0,  presence_factor: 0.60, system_sent: true,  window: post_delivery, admissible: [NR],         api_slot: customer_communication}
+  vack:      {cash: 0.30, seconds: 0,  presence_factor: 0.45, system_sent: true,  window: post_delivery, admissible: [NR, NAD, EB], api_slot: customer_communication}
+  _meta: {source: "SPEC §6; presence 0.90 ASSUMED; ack responses from §8.8 (0.60 basic, verified −15pp); api_slot from razorpay.com/docs/api/disputes/contest", sweep: null}
+  customer_presence_sweep: {value: 0.90, unit: ratio, source: "ASSUMED — Phase 4 writes this value into presence_factor of otp AND signature before generation", sweep: [0.75, 0.98], rank: 8}
+
+# ---------------------------------------------------------------------------
+# TRUE uplifts (pp of win probability on disputes against CORRECT fulfillment). HIDDEN from optimizer.
+# These were NOT in the design. They are ASSUMED and are sensitivity rank 1. Sweep as a global
+# multiplier on each block (uplift.sweep_multiplier) AND the ack/OTP ratio separately.
+uplift_true:
+  NR:  {otp: 0.40, signature: 0.35, geotag: 0.20, vack: 0.20, ack: 0.16}
+  NAD: {packing: 0.25, serial: 0.15, sealed: 0.10, weight: 0.05, vack: 0.10}
+  EB:  {weight: 0.30, packing: 0.20, sealed: 0.15, serial: 0.10, vack: 0.08}
+  _meta: {source: "ASSUMED. ack = 0.4×OTP anchored to Visa 2021 dispute-rule clarification (issuer must address evidence of receipt at agreed location). Others: relative strength judgement only.", sweep: "see sweep_multiplier and ack_otp_ratio"}
+  sweep_multiplier: {value: 1.0, unit: ratio, source: ASSUMED, sweep: [0.5, 1.5], rank: 1}
+  ack_otp_ratio:    {value: 0.40, unit: ratio, source: ASSUMED, sweep: [0.2, 0.8], rank: 1}
+  # Truth-conditional modifiers (hidden). Applied multiplicatively to the block above.
+  on_merchant_fault:     {value: -1.0, unit: ratio, source: SPEC, sweep: null, rank: null}   # packing/weight convict the merchant
+  on_transit_damage:     {value: 1.0,  unit: ratio, source: SPEC, sweep: null, rank: null}   # pre-dispatch exonerates
+  on_never_handed_off:   {value: 0.0,  unit: ratio, source: SPEC, sweep: null, rank: null}   # handoff artefact cannot exist
+  on_misdelivered_otp:   {value: 0.0,  unit: ratio, source: SPEC, sweep: [0.0, 0.5], rank: 13} # HEADLINE 0; carrier-fault sweep only
+
+overlap: # set uplift = max + (1-rho) * sum(rest), capped at 1 - base_win
+  NR:  {value: 0.55, unit: ratio, source: SPEC, sweep: [0.2, 0.7], rank: 7}
+  NAD: {value: 0.35, unit: ratio, source: SPEC, sweep: [0.2, 0.7], rank: 7}
+  EB:  {value: 0.30, unit: ratio, source: SPEC, sweep: [0.2, 0.7], rank: 7}
+
+base_win: # tracking-only, contested
+  NR:  {value: 0.25, unit: ratio, source: SPEC, sweep: [0.15, 0.35], rank: 14}
+  NAD: {value: 0.20, unit: ratio, source: SPEC, sweep: [0.10, 0.30], rank: 14}
+  EB:  {value: 0.15, unit: ratio, source: SPEC, sweep: [0.08, 0.25], rank: 14}
+
+# ---------------------------------------------------------------------------
+categories:
+  order: {value: [Electronics, Jewellery, Apparel, Home, FMCG], unit: list, source: SPEC, sweep: null, rank: null}
+  # target_rate is a CALIBRATION TARGET checked after generation (B9), never an input to generation.
+  Electronics: {share: 0.20, target_rate: 0.0040, mix: {NR: 0.55, NAD: 0.30, EB: 0.15}, vmin: 8000,  vmax: 90000,  cogs: 0.85, fragility: 0.6}
+  Jewellery:   {share: 0.05, target_rate: 0.0055, mix: {NR: 0.45, NAD: 0.20, EB: 0.35}, vmin: 15000, vmax: 200000, cogs: 0.55, fragility: 0.3}
+  Apparel:     {share: 0.35, target_rate: 0.0035, mix: {NR: 0.15, NAD: 0.80, EB: 0.05}, vmin: 500,   vmax: 6000,   cogs: 0.35, fragility: 0.1}
+  Home:        {share: 0.15, target_rate: 0.0030, mix: {NR: 0.20, NAD: 0.75, EB: 0.05}, vmin: 2000,  vmax: 40000,  cogs: 0.60, fragility: 0.8}
+  FMCG:        {share: 0.25, target_rate: 0.0005, mix: {NR: 0.30, NAD: 0.65, EB: 0.05}, vmin: 200,   vmax: 2000,   cogs: 0.75, fragility: 0.2}
+  _meta: {source: "SPEC §8.5; anchored to Chargeflow Q3-2025 0.26% avg chargeback rate and ~18% NAD share. share = order-mix share (SPEC). Value distribution: log-uniform [vmin, vmax].", sweep: null}
+  rate_sweep_multiplier: {value: 1.0, unit: ratio, source: SPEC, sweep: [0.5, 1.5], rank: 6}
+  category_rate_tolerance: {value: 0.30, unit: ratio, source: SPEC, sweep: null, rank: null}
+  cogs_sweep_multiplier:   {value: 1.0, unit: ratio, source: SPEC, sweep: [0.6, 1.4], rank: 12}
+
+# ---------------------------------------------------------------------------
+# Archetypes. policy = {evidence: min_order_value}; "random" = uniform random subset each order.
+# Every evidence type appears in ≥1 policy (identifiability, see 00_context §6).
+archetypes:
+  order: {value: [Diligent, HandoffHeavy, PhotoPref, AckFirst, Minimal, Erratic], unit: list, source: SPEC, sweep: null, rank: null}
+  Diligent:     {share: 0.15, compliance: 0.90, contest: 0.85, quality_rank: 6, policy: {weight: 0, packing: 0, serial: 0, otp: 25000}}
+  HandoffHeavy: {share: 0.15, compliance: 0.85, contest: 0.75, quality_rank: 5, policy: {geotag: 0, otp: 15000, signature: 50000}}
+  PhotoPref:    {share: 0.15, compliance: 0.85, contest: 0.65, quality_rank: 4, policy: {sealed: 0, packing: 0}}
+  AckFirst:     {share: 0.15, compliance: 0.80, contest: 0.60, quality_rank: 3, policy: {ack: 0, vack: 10000}}
+  Minimal:      {share: 0.30, compliance: 0.95, contest: 0.50, quality_rank: 2, policy: {}}
+  Erratic:      {share: 0.10, compliance: 0.30, contest: 0.35, quality_rank: 1, policy: random}
+  _meta: {source: "SPEC §8.6 (v9 redesign). Shares are of MERCHANTS. quality_rank 1 = worst (highest hidden_quality fault multiplier); merchants sorted worst→best are assigned archetypes in contiguous blocks by rank so shares are exact and quality-confounded.", sweep: null}
+  random_stratum_frac:   {value: 0.05, unit: ratio, source: SPEC, sweep: [0.0, 0.05], rank: 15}  # 0.0 = pure-observational robustness run
+  contest_evidence_slope: {value: 0.06, unit: logit_per_evidence_held, source: ASSUMED, sweep: [0.0, 0.15], rank: 5}
+  ack_optin_rate:        {value: 0.70, unit: ratio, source: ASSUMED, sweep: [0.5, 0.9], rank: 16}
+
+merchants:
+  n_merchants:            {value: 6000, unit: count, source: SPEC, sweep: null, rank: null}
+  size_lognormal_sigma:   {value: 1.2,  unit: ratio, source: SPEC, sweep: null, rank: null}
+  quality_lognormal_sigma: {value: 0.5, unit: ratio, source: SPEC, sweep: null, rank: null}  # merchant-fault multiplier; mean-normalised
+  tier_full:              {value: 0.55, unit: ratio, source: SPEC, sweep: [0.3, 0.8], rank: 17}
+  tier_post_delivery_only: {value: 0.30, unit: ratio, source: SPEC, sweep: null, rank: null}  # remainder = NONE
+
+# ---------------------------------------------------------------------------
+sim:
+  truth_base_rate:  # per order, before merchant-quality / fragility multipliers; mean-normalised so population rates hold
+    misdelivered:     {value: 0.0020, unit: ratio, source: SPEC, sweep: [0.001, 0.003], rank: 18}
+    never_handed_off: {value: 0.0025, unit: ratio, source: SPEC, sweep: [0.00125, 0.00375], rank: 18}
+    merchant_fault:   {value: 0.0045, unit: ratio, source: SPEC, sweep: [0.00225, 0.00675], rank: 18}
+    transit_damage:   {value: 0.0055, unit: ratio, source: SPEC, sweep: [0.00275, 0.00825], rank: 18}
+  fragility_effect: {value: 1.0, unit: log_multiplier_at_fragility_1, source: SPEC, sweep: null, rank: null}  # transit_damage *= exp(fragility_effect*(fragility-0.4))
+  customer_response:   # [confirm, report, silent]; only elicited if an ack was actually sent
+    delivered_correct: {value: [0.60, 0.02, 0.38], unit: ratio, source: SPEC, sweep: null, rank: null}
+    merchant_fault_or_damage: {value: [0.05, 0.70, 0.25], unit: ratio, source: SPEC, sweep: null, rank: null}
+    not_received:      {value: [0.08, 0.65, 0.27], unit: ratio, source: SPEC, sweep: null, rank: null}
+  verified_ack_response_penalty: {value: 0.15, unit: pp, source: SPEC, sweep: null, rank: null}
+  # Dispute funnel (DERIVED, see docs/phase_1 §7). Six unknowns, six targets:
+  #   gamma[cat]  — category escalation weight, solved so each category's potential-dispute rate hits categories.<cat>.target_rate
+  #   theta       — false-claim propensity, solved so the population share of GENUINE-failure disputes = genuine_share_target
+  # Population dispute rate is then implied (≈0.29%) and REPORTED, not targeted.
+  genuine_share_target: {value: 0.35, unit: ratio, source: "ASSUMED — complement of reference.phi (0.65 share vs correct fulfillment)", sweep: [0.20, 0.50], rank: 4}
+  theta:        {value: null, unit: ratio, source: "DERIVED by bisection on canonical seed; stored in outputs/theta.json; FIXED thereafter", sweep: null, rank: null}
+  gamma:        {value: null, unit: dict, source: "DERIVED per category, same file", sweep: null, rank: null}
+  theta_search: {value: [0.0001, 0.2], unit: ratio, source: SPEC, sweep: null, rank: null}
+  gamma_search: {value: [0.001, 20.0], unit: ratio, source: SPEC, sweep: null, rank: null}
+  calibration_rel_tol: {value: 0.01, unit: ratio, source: SPEC, sweep: null, rank: null}
+  false_claim_value_elasticity: {value: 0.3, unit: ratio, source: ASSUMED, sweep: [0.0, 0.6], rank: 19}  # both channels ∝ (V/value_ref)^elasticity
+  false_claim_value_ref: {value: 10000, unit: INR, source: SPEC, sweep: null, rank: null}
+  fragility_ref: {value: 0.4, unit: ratio, source: SPEC, sweep: null, rank: null}
+  deterrence:    {value: 0.0, unit: ratio, source: SPEC, sweep: [0.0, 0.2], rank: 20}  # HEADLINE 0 — non-zero makes Stage A circular
+  silence_yield: {value: 0.0, unit: pp,    source: SPEC, sweep: [0.0, 0.10], rank: 20}
+  # Latency (days). Visa 13.1: 120d from expected delivery; merchant response 30d.
+  latency:
+    expected_delivery_days:   {value: 7,   unit: days, source: SPEC, sweep: null, rank: null}
+    dispute_fast_share:       {value: 0.60, unit: ratio, source: ASSUMED_FIXED, sweep: null, rank: null}
+    dispute_fast_max_days:    {value: 45,  unit: days, source: ASSUMED_FIXED, sweep: null, rank: null}
+    dispute_max_days:         {value: 120, unit: days, source: "CITED:Visa 13.1 issuer window", sweep: null, rank: null}
+    response_days:            {value: 30,  unit: days, source: "CITED:Visa/Razorpay merchant response window", sweep: null, rank: null}
+    resolution_lognormal_median_days: {value: 35, unit: days, source: ASSUMED_FIXED, sweep: null, rank: null}
+    resolution_lognormal_p95_days:    {value: 90, unit: days, source: ASSUMED_FIXED, sweep: null, rank: null}
+  timeline:   # month m spans days [days_per_month·(m-1), days_per_month·m)
+    days_per_month:        {value: 30, unit: days, source: SPEC, sweep: null, rank: null}
+    order_months:          {value: [1, 30], unit: months, source: SPEC, sweep: null, rank: null}
+    decision_month_end:    {value: 26, unit: month, source: SPEC, sweep: null, rank: null}
+    train_months:          {value: [1, 14], unit: months, source: SPEC, sweep: null, rank: null}
+    validate_months:       {value: [15, 18], unit: months, source: SPEC, sweep: null, rank: null}
+    gap_months:            {value: [19, 26], unit: months, source: SPEC, sweep: null, rank: null}
+    test_months:           {value: [27, 30], unit: months, source: SPEC, sweep: null, rank: null}
+    outcome_observed_through_month: {value: 39, unit: month, source: SPEC, sweep: null, rank: null}
+  max_censor_frac:   {value: 0.03, unit: ratio, source: SPEC, sweep: null, rank: null}   # train/validate; test reports its own
+  # κ dial: individual-risk signal strength. risk_mult = exp(κ·z_risk − κ²/2); NR-share logit += κ·type_shift·z_type
+  kappa:
+    grid:        {value: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], unit: list, source: SPEC, sweep: null, rank: null}
+    canonical:   {value: 0.6, unit: ratio, source: SPEC, sweep: null, rank: null}
+    type_shift:  {value: 0.8, unit: logit, source: ASSUMED, sweep: [0.4, 1.2], rank: 3}
+    # z_risk = standardise(c_new·new_customer + c_addr·address_mismatch + c_prior·log1p(prior_disputes)
+    #                       − c_age·log1p(account_age_days/30) + c_noise·N(0,1))
+    coef_new_customer:   {value: 0.8, unit: ratio, source: ASSUMED_FIXED, sweep: null, rank: null}
+    coef_address_mismatch: {value: 1.0, unit: ratio, source: ASSUMED_FIXED, sweep: null, rank: null}
+    coef_prior_disputes: {value: 1.2, unit: ratio, source: ASSUMED_FIXED, sweep: null, rank: null}
+    coef_account_age:    {value: 0.4, unit: ratio, source: ASSUMED_FIXED, sweep: null, rank: null}
+    coef_noise:          {value: 1.0, unit: ratio, source: ASSUMED_FIXED, sweep: null, rank: null}  # irreducible; keeps Stage A from being an oracle
+    # z_type = standardise(address_mismatch + 0.5·new_customer + noise)
+  customer_features:
+    p_new_customer:      {value: 0.35, unit: ratio, source: ASSUMED_FIXED, sweep: null, rank: null}
+    p_address_mismatch:  {value: 0.08, unit: ratio, source: ASSUMED_FIXED, sweep: null, rank: null}
+    prior_disputes_poisson_mean: {value: 0.05, unit: count, source: ASSUMED_FIXED, sweep: null, rank: null}
+    account_age_lognormal_median_days: {value: 400, unit: days, source: ASSUMED_FIXED, sweep: null, rank: null}
+  n_carriers: {value: 3, unit: count, source: SPEC, sweep: null, rank: null}
+  carrier_reliability_sigma: {value: 0.3, unit: log_multiplier, source: SPEC, sweep: null, rank: null}
+  n_issuer_families: {value: 6, unit: count, source: SPEC, sweep: null, rank: null}
+  network_visa_share: {value: 0.55, unit: ratio, source: ASSUMED_FIXED, sweep: null, rank: null}
+  # World D (distribution shift): applied to test months only when enabled
+  shift:
+    enabled_default:  {value: false, unit: flag, source: SPEC, sweep: null, rank: null}
+    category_share_shift: {value: {Electronics: 0.30, Jewellery: 0.05, Apparel: 0.25, Home: 0.15, FMCG: 0.25}, unit: ratio, source: SPEC, sweep: null, rank: null}
+    risk_coef_multiplier: {value: 0.7, unit: ratio, source: SPEC, sweep: null, rank: null}
+
+# ---------------------------------------------------------------------------
+features:
+  permitted: {value: [order_id, merchant_id, customer_id, category, order_value, payment_method, network,
+                       issuer_family, new_customer, address_mismatch, prior_disputes, account_age_days,
+                       cart_items, hour_of_day, month, merchant_order_count, merchant_dispute_rate_hist,
+                       merchant_contest_rate_hist, merchant_compliance_hist,
+                       verified_contact_available, ack_optin, eligible_tier, decision_date],
+              unit: list, source: SPEC, sweep: null, rank: null}
+  forbidden: {value: [delivered_at, delivery_status, ack_outcome, complied, evidence_captured,
+                       dispute_opened, dispute_type, dispute_outcome, contested, won, resolution_date,
+                       hidden_truth, hidden_uplift, hidden_quality, hidden_carrier_reliability,
+                       hidden_z_risk, hidden_z_type, hidden_risk_mult],
+              unit: list, source: SPEC, sweep: null, rank: null}
+  merchant_hist_lookback_months: {value: 12, unit: months, source: SPEC, sweep: null, rank: null}
+  # merchant_*_hist are computed in Phase 2 from RESOLVED history outcomes only (never from hidden_ columns).
+  # Phase 1 emits them as NaN placeholders (nullable) and Phase 2 overwrites; Phase 3 refuses NaN.
+  hist_shrinkage_n: {value: 20, unit: count, source: SPEC, sweep: null, rank: null}
+
+# ---------------------------------------------------------------------------
+models:
+  support_min:        {value: 50, unit: count, source: SPEC, sweep: null, rank: null}
+  lgbm:
+    stage_a: {value: {objective: binary, num_leaves: 63, learning_rate: 0.05, n_estimators: 600, min_child_samples: 200, feature_fraction: 0.8, bagging_fraction: 0.8, bagging_freq: 1, scale_pos_weight: 1.0, deterministic: true, force_row_wise: true, verbose: -1}, unit: dict, source: SPEC, sweep: null, rank: null}
+    stage_b: {value: {objective: multiclass, num_class: 3, num_leaves: 31, learning_rate: 0.05, n_estimators: 300, min_child_samples: 30, deterministic: true, force_row_wise: true, verbose: -1}, unit: dict, source: SPEC, sweep: null, rank: null}
+    stage_c: {value: {objective: binary, num_leaves: 31, learning_rate: 0.05, n_estimators: 300, min_child_samples: 30, deterministic: true, force_row_wise: true, verbose: -1}, unit: dict, source: SPEC, sweep: null, rank: null}
+    stage_w: {value: {objective: binary, num_leaves: 31, learning_rate: 0.03, n_estimators: 400, min_child_samples: 20, deterministic: true, force_row_wise: true, verbose: -1}, unit: dict, source: SPEC, sweep: null, rank: null}
+  early_stopping_rounds: {value: 50, unit: count, source: SPEC, sweep: null, rank: null}
+  calib:
+    method:         {value: isotonic, unit: str, source: SPEC, sweep: null, rank: null}
+    mean_tolerance: {value: 0.05, unit: ratio, source: SPEC, sweep: null, rank: null}   # |mean(p)-rate|/rate on validation
+    ece_bins:       {value: 15, unit: count, source: SPEC, sweep: null, rank: null}
+    max_ece:        {value: 0.02, unit: ratio, source: SPEC, sweep: null, rank: null}    # Stage A on validation; report only for B/C
+  materialisation_min_support: {value: 30, unit: count, source: SPEC, sweep: null, rank: null}
+
+# ---------------------------------------------------------------------------
+arms:
+  arm4_value_bands:   {value: 5, unit: count, source: SPEC, sweep: null, rank: null}   # log-spaced within category range
+  arm4_contest_bins: {value: 3, unit: count, source: "SPEC — Arm 4 conditions on category × value band × observed contest-history tercile × tier, so κ=0 is a fair tie", sweep: null, rank: null}
+  arm3_rules:         {value: {Electronics: {otp: 40000, packing: 0, serial: 0, ack: 0}, Jewellery: {otp: 40000, weight: 0, packing: 0, ack: 0}, Apparel: {packing: 2000, ack: 0}, Home: {packing: 5000, ack: 0}, FMCG: {}}, unit: dict, source: "SPEC — deliberately naive category×value rules", sweep: null, rank: null}
+
+# ---------------------------------------------------------------------------
+opt:
+  include_prevention: {value: true, unit: flag, source: "SPEC — optimizer values acks for prevention (Stage P) as well as defence; the frozen oracle is defence-only, so known-answer tests run with this false", sweep: null, rank: null}
+  stage_a_target:     {value: exposure, unit: str, source: "SPEC — exposure = dispute_opened OR prevented; observable and invariant to the deployed ack policy (deterrence=0)", sweep: null, rank: null}
+
+# ---------------------------------------------------------------------------
+report:
+  min_seeds:        {value: 5, unit: count, source: SPEC, sweep: null, rank: null}
+  ci_level:         {value: 0.95, unit: ratio, source: SPEC, sweep: null, rank: null}
+  per_orders:       {value: 1000, unit: count, source: SPEC, sweep: null, rank: null}
+  kappa0_max_gain_frac: {value: 0.01, unit: ratio, source: "SPEC — at κ=0 Arm5−Arm4 mean must be ≤ 1% of Arm4−Arm1 (arithmetic: 0.2–0.5%); larger ⇒ suspected leak", sweep: null, rank: null}
+  lorenz_deciles:   {value: 10, unit: count, source: SPEC, sweep: null, rank: null}
+  lorenz_top_decile_min_lift: {value: 2.0, unit: ratio, source: SPEC, sweep: null, rank: null}
+  simulator_footer: {value: "Simulator result · production calibration requires Razorpay dispute history", unit: str, source: SPEC, sweep: null, rank: null}
+  olist_footer:     {value: "Olist public dataset · Brazil 2016–18 · no chargeback or evidence data · detection only", unit: str, source: SPEC, sweep: null, rank: null}
+
+sweep:
+  oat_levels:    {value: 3, unit: count, source: SPEC, sweep: null, rank: null}      # lo, central, hi
+  oat_max_rank:  {value: 12, unit: count, source: SPEC, sweep: null, rank: null}     # OAT only ranks ≤ 12
+  lhs_points:    {value: 20, unit: count, source: SPEC, sweep: null, rank: null}
+  lhs_max_rank:  {value: 8, unit: count, source: SPEC, sweep: null, rank: null}
+  lhs_seed_offset: {value: 777, unit: count, source: SPEC, sweep: null, rank: null}
+
+# ---------------------------------------------------------------------------
+olist:
+  kaggle_dataset: {value: olistbr/brazilian-ecommerce, unit: str, source: "CITED:kaggle.com/datasets/olistbr/brazilian-ecommerce", sweep: null, rank: null}
+  data_dir:       {value: data/olist, unit: path, source: SPEC, sweep: null, rank: null}
+  expected_rows: {value: {olist_orders_dataset.csv: 99441, olist_order_items_dataset.csv: 112650, olist_order_reviews_dataset.csv: 99224}, unit: count, source: "CITED:Kaggle dataset listing", sweep: null, rank: null}
+  row_count_tolerance: {value: 0.01, unit: ratio, source: SPEC, sweep: null, rank: null}
+  required_files: {value: [olist_orders_dataset.csv, olist_order_items_dataset.csv, olist_order_payments_dataset.csv, olist_order_reviews_dataset.csv, olist_products_dataset.csv, olist_customers_dataset.csv, olist_sellers_dataset.csv, product_category_name_translation.csv], unit: list, source: SPEC, sweep: null, rank: null}
+  # Label: fulfillment_complaint = 1 if ANY of:
+  #  (a) order_status in {delivered} AND review_score <= 2 AND order_delivered_customer_date > order_estimated_delivery_date
+  #  (b) order_status in {delivered} AND review_score <= 2 AND review_comment_message matches complaint_regex
+  #  (c) order_status in {shipped, approved, processing, invoiced} AND purchase_date + not_delivered_days < dataset_end
+  # else 0. Orders with status canceled/unavailable/created are EXCLUDED (not prepaid-fulfilled).
+  label:
+    low_score_max:       {value: 2, unit: score, source: SPEC, sweep: null, rank: null}
+    not_delivered_days:  {value: 60, unit: days, source: SPEC, sweep: null, rank: null}
+    complaint_regex:     {value: "n[aã]o recebi|nao chegou|não chegou|produto errado|veio errado|diferente do anunci|vazio|quebrad|danificad|nunca chegou|não entregue|nao entregue", unit: regex_pt, source: SPEC, sweep: null, rank: null}
+    dataset_end:         {value: "2018-10-17", unit: date, source: "CITED:dataset span 2016-09..2018-10", sweep: null, rank: null}
+  split:   # by order_purchase_timestamp; maturity: exclude last maturity_days before dataset_end
+    train_end:      {value: "2018-02-28", unit: date, source: SPEC, sweep: null, rank: null}
+    validate_end:   {value: "2018-05-31", unit: date, source: SPEC, sweep: null, rank: null}
+    maturity_days:  {value: 75, unit: days, source: SPEC, sweep: null, rank: null}   # 60 not-delivered + 15 review lag
+  features:
+    permitted: {value: [price_total, freight_total, n_items, n_sellers, product_category_en, product_weight_g, product_volume_cm3, product_photos_qty, product_description_length, payment_type, payment_installments, customer_state, seller_state, same_state, purchase_month, purchase_dow, purchase_hour, seller_prior_orders, seller_prior_complaint_rate, customer_prior_orders], unit: list, source: SPEC, sweep: null, rank: null}
+    forbidden: {value: [order_status, order_delivered_customer_date, order_delivered_carrier_date, order_estimated_delivery_date, order_approved_at, review_score, review_comment_message, review_comment_title, review_creation_date, shipping_limit_date], unit: list, source: SPEC, sweep: null, rank: null}
+  prior_shrinkage_n: {value: 20, unit: count, source: SPEC, sweep: null, rank: null}
+  operating_recalls: {value: [0.3, 0.5, 0.7], unit: list, source: SPEC, sweep: null, rank: null}
+  fp_cost_proxy_seconds: {value: 70, unit: seconds, source: "SPEC — four pre-dispatch items", sweep: null, rank: null}
+
+# ---------------------------------------------------------------------------
+# Reference oracle assumptions (used ONLY by ev_reference.py and known-answer tests; never by the optimizer)
+reference:
+  phi: {value: 0.65, unit: ratio, source: "DERIVED — must equal 1 − sim.genuine_share_target (loader cross-check); oracle-only", sweep: null, rank: null}
+  pc_population: {value: 0.6125, unit: ratio, source: "DERIVED from archetypes", sweep: null, rank: null}
+  compliance_population: {value: 0.825, unit: ratio, source: "DERIVED from archetypes", sweep: null, rank: null}
+  known_answers:   # from the pre-build arithmetic; tests assert to 2 decimals
+    electronics_45k_x1_otp_standalone_ev:   {value: -6.86, unit: INR, source: DERIVED, sweep: null, rank: null}
+    electronics_45k_x1_otp_breakeven:       {value: 71357, unit: INR, source: DERIVED, sweep: null, rank: null}
+    apparel_3500_x1_packing_standalone_ev:  {value: -1.66, unit: INR, source: DERIVED, sweep: null, rank: null}
+    apparel_packing_breakeven_x1:           {value: 10356, unit: INR, source: DERIVED, sweep: null, rank: null}
+    electronics_45k_x2_otp_incremental:     {value: -1.27, unit: INR, source: DERIVED, sweep: null, rank: null}
+    electronics_45k_x4_signature_incremental: {value: -9.76, unit: INR, source: DERIVED, sweep: null, rank: null}
+    jewellery_200k_x1_signature_incremental: {value: -4.78, unit: INR, source: DERIVED, sweep: null, rank: null}

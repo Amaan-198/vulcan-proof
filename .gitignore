@@ -1,0 +1,12 @@
+.venv/
+data/*
+!data/.gitkeep
+outputs/*
+!outputs/.gitkeep
+!outputs/**/manifest.json
+!outputs/theta.json
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+vulcan_proof/ui/dist/
