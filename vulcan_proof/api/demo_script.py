@@ -104,6 +104,10 @@ def build_demo_script(
         beat_one_id = str(lost_nr.iloc[0]["order_id"])
         beat_one_fallback = False
 
+    outcome_one = outcomes.loc[beat_one_id] if beat_one_id and beat_one_id in outcomes.index else None
+    electronics_one = electronics.loc[electronics["order_id"].astype(str).eq(beat_one_id)] if beat_one_id else pd.DataFrame()
+    opened_one = outcome_one is not None and int(outcome_one["dispute_opened"]) == 1
+
     beat_one = _with_id(
         {
             "beat": BEAT_ONE,
@@ -113,13 +117,14 @@ def build_demo_script(
         },
         beat_one_id,
     )
-    if beat_one_id:
-        outcome_one = outcomes.loc[beat_one_id]
+    if opened_one and not electronics_one.empty:
         beat_one["copy"] = (
             f"A stored test outcome opens a {str(outcome_one['dispute_type'])} dispute on a "
-            f"{str(electronics.loc[electronics['order_id'].astype(str).eq(beat_one_id)].iloc[0]['category'])} order. "
-            f"The selected order value is {_money(electronics.loc[electronics['order_id'].astype(str).eq(beat_one_id)].iloc[0]['order_value'])}."
+            f"{str(electronics_one.iloc[0]['category'])} order. "
+            f"The selected order value is {_money(electronics_one.iloc[0]['order_value'])}."
         )
+    elif beat_one_id:
+        beat_one["copy"] = "The selected test slice has no matching opened Electronics dispute."
     else:
         beat_one["copy"] = "The selected test slice has no matching Electronics order."
 
@@ -237,15 +242,16 @@ def build_demo_script(
         "copy": "Production-scale defense-only evidence is deferred; smoke validation is available." if deferred else "The extended validation chart is available in the report artefacts.",
     }
 
-    package = service.dispute_package(beat_one_id) if beat_one_id else {"items": []}
+    package_available = opened_one and int(outcome_one["materialised_bitmask"]) != 0
+    package = service.dispute_package(beat_one_id) if package_available else {"items": []}
     beat_seven = _with_id(
         {
             "beat": BEAT_SEVEN,
             "title": "Dispute package · API-ready evidence",
-            "fallback_used": False,
-            "fallback_reason": None,
+            "fallback_used": not package_available,
+            "fallback_reason": "No opened dispute with materialised evidence was present in the selected test slice." if not package_available else None,
             "package": package,
-            "copy": "Materialised evidence is mapped to the dispute API slots and bound to the order id.",
+            "copy": "Materialised evidence is mapped to the dispute API slots and bound to the order id." if package_available else "A dispute package is unavailable for the selected fallback order.",
         },
         beat_one_id,
     )

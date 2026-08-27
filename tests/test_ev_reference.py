@@ -12,7 +12,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from vulcan_proof import ev_reference as R  # noqa: E402
 
-PARAMS = yaml.safe_load((ROOT / "params" / "params.yaml").read_text())
+PARAMS = yaml.safe_load((ROOT / "params" / "params.yaml").read_text(encoding="utf-8"))
 KA = {k: v["value"] for k, v in PARAMS["reference"]["known_answers"].items()}
 
 
