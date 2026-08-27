@@ -1,14 +1,33 @@
+# Local Python environment and tooling caches
 .venv/
 data/*
 !data/.gitkeep
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+# Generated phase artifacts; required manifests remain trackable
 outputs/*
 !outputs/.gitkeep
 !outputs/*/
 outputs/*/*
 !outputs/**/manifest.json
 !outputs/theta.json
-__pycache__/
-*.pyc
-.pytest_cache/
+outputs/.pytest_tmp*/
+outputs/phase4_*_check*/
+outputs/phase5/plan_live.json
+outputs/phase5/playwright-*.png
+
+# Node dependencies, build caches, and browser-test reports
 node_modules/
+.vite/
+playwright-report/
+test-results/
+blob-report/
 vulcan_proof/ui/dist/
