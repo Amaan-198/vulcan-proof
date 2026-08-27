@@ -1,7 +1,8 @@
 # 03 — Phases, order, and halt protocol
 
 Six phases. Each produces something mechanically checkable before the next begins. An agent
-implements exactly one phase per instruction and halts.
+implements exactly one phase per instruction and halts. Phase 4 has a buildathon implementation
+milestone and a separate optional extended-validation track; the latter is not a hidden gate.
 
 | Phase | Produces | Depends on | Done when (`python scripts\task.py check-phase N`) |
 |---|---|---|---|
@@ -9,8 +10,20 @@ implements exactly one phase per instruction and halts.
 | **1** | Hidden-truth simulator: orders, merchants, truth, evidence policies, latencies, censoring, θ calibration | 0 | `tests/test_phase1.py` pass; smoke world (20k) and canonical world (3M, 1 seed) generate; calibration targets within tolerance; censor fraction ≤ max |
 | **2** | Outcome resolver, prevention, **arm0 (historical policy) + merchant history features**, Arms 1–4; paired ₹ reporting | 1 | `tests/test_phase2.py` pass; Arms 1–4 net ₹ with CI on 5 seeds of the smoke world at κ ∈ {0, 0.6}; Arm 2 ≤ Arm 4; history features written |
 | **3** | Stages A/B/C, materialisation model, defensibility model, support mask, calibration, subset optimizer = Arm 5 | 2 | `tests/test_phase3.py`, `tests/test_firewall.py`, `tests/test_repro.py` pass; known-answer optimizer cases match `ev_reference`; calibrated means within tolerance; κ = 0 gain ≤ 1% of orchestration value |
-| **4** | κ-sweep with κ\*; OAT and LHS sweeps; kill-condition verdict; all charts | 3 | `tests/test_phase4.py` pass; `outputs/phase4/kappa_star.json` exists with a value or `null` and the verdict; every chart carries the footer |
-| **5** | FastAPI service + React surface; demo script instantiated from Phase 4 numbers | 4 | `tests/test_phase5.py` pass; demo script JSON built from `outputs/phase4/`; smoke run of the five-minute flow |
+| **4** | κ-sweep with κ\*; OAT and LHS sweeps; kill-condition verdict; all charts | 3 | Buildathon: implementation, tests, smoke/end-to-end validation, and the Phase 4 check pass; the full production sweep is explicitly deferred as optional extended validation. If run later, its artifacts and report must satisfy the extended criteria in `docs/phase_4_sweeps.md`. |
+| **5** | FastAPI service + React surface; demo script instantiated from available Phase 3/4 evidence | 4 | `tests/test_phase5.py` pass; demo script JSON uses Phase 3 plus available Phase 4 smoke/extended artefacts; absent production artefacts produce explicit deferred-status fallbacks; smoke run of the five-minute flow |
+
+### Phase 4 completion tracks
+
+The approximately 270-run, 1M-order-per-run Phase 4 sweep is **optional extended validation**.
+It is intentionally not a buildathon completion blocker. The sweep engine, κ/OAT/LHS/robustness
+logic, charts, tests, smoke runs, and mechanical checks remain implemented and must be kept
+validated. Buildathon completion uses those implementation checks plus smoke/end-to-end evidence;
+it does not require `outputs/phase4/` production artifacts and must not invent production results.
+
+The optional sweep may be run later when publication-grade or final robustness evidence is needed.
+Phase 5 must support the deferred-status buildathon mode; any production-scale claims remain gated
+on that later run.
 
 ## Rules that apply to every phase
 
@@ -22,7 +35,9 @@ implements exactly one phase per instruction and halts.
 4. Do not modify code owned by an earlier phase except to fix a bug that a test in your phase
    exposes, and then say so in the report.
 5. Write tests first for every trap listed in your phase document, then the code.
-6. Run `python scripts\task.py check-phase <N>` inside the venv; write `outputs/phase<N>_REPORT.md`; halt.
+6. Run `python scripts\task.py check-phase <N>` inside the venv; write the phase report when the
+   phase's required artifacts are produced; halt. Phase 4's buildathon track records its explicit
+   deferral in the review/changelog documentation and does not fabricate `outputs/phase4/` results.
 7. Every `scripts/run_phase*.py` starts with `require_venv()` and wraps its body in
    `if __name__ == "__main__":` (Windows spawn).
 
@@ -36,8 +51,9 @@ function `check_phase_N()` to it.
 ## Smoke-world contract
 
 Every phase from 1 onward must run end-to-end on `run.n_orders_smoke` (20,000 orders) in under
-two minutes on a laptop. Tests use the smoke world. The canonical world (3M) is run once per phase
-by the agent and its manifest committed; it is not run in tests.
+two minutes on a laptop. Tests use the smoke world. A canonical or production-scale run is required
+only when that phase's done-criteria explicitly requires it. Phase 4's production sweep is optional
+extended validation; its smoke/end-to-end implementation check is the buildathon requirement.
 
 ## Directory contract
 

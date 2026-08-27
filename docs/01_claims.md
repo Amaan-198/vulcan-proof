@@ -46,6 +46,16 @@ under `docs/` are **excluded** — they must be able to name the forbidden phras
 | "causal", "proven yield" (about uplifts) | observational |
 | "real-world savings" without "simulated" in the same sentence | labelling rule |
 
+## Phase 4 deferred-evidence rule
+
+The full Phase 4 production sweep is optional extended validation and is officially deferred for
+the buildathon. Phase 5 may ship in smoke-only mode without `outputs/phase4/` production artefacts.
+In that mode, the product surface must expose a deferred-validation status and must not represent a
+missing κ result as `κ* = null`, zero, or a production measurement. A κ result may be shown only
+when it comes from a genuine completed Phase 4 sweep; smoke values must be labelled smoke/simulator
+validation. If production artefacts are later supplied, they must pass the Phase 4 extended checks
+before being surfaced as final or publication-grade robustness evidence.
+
 ## Labelling rule
 
 Every chart with a ₹ axis carries the footer: `Simulator result · production calibration requires

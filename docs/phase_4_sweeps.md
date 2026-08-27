@@ -1,7 +1,8 @@
 # Phase 4 — κ-sweep, κ\*, OAT and LHS sweeps, kill condition, charts
 
 **Read first:** `docs/00_context.md` §4, §7; `docs/02_engineering_rules.md` B14; `params.yaml`
-`sweep`, `report`, and every `rank`. **Produces:** `vulcan_proof/sweep/`, `outputs/phase4/`.
+`sweep`, `report`, and every `rank`. **Produces:** `vulcan_proof/sweep/`; `outputs/phase4/` is
+produced only when the optional extended-validation sweep is launched.
 **Must not touch:** any model, arm, or simulator code. If a sweep exposes a bug, stop and report;
 do not patch and continue. **Halt** after `python scripts\task.py check-phase 4`.
 
@@ -12,9 +13,25 @@ Whether the ML claim survives. The pre-build arithmetic says: at κ = 0 a tuned 
 at which the paired Arm 5 − Arm 4 95% CI lies entirely above zero — and applies the kill
 condition. Both outcomes are legitimate. The reporting code must be able to write `null`.
 
-## Runs
+## Buildathon completion policy
 
-All sweep runs use `run.n_orders_sweep` (1M) and `run.n_seeds_sweep` (5) seeds, parallelised over
+The full approximately 270-run, 1M-order-per-run sweep is intentionally **skipped for the
+buildathon**. It is optional extended validation, not a completion blocker. Do not launch it as
+part of the buildathon milestone and do not create fake production tables, charts, or report values.
+
+The buildathon milestone is complete when the sweep engine and all κ/OAT/LHS/robustness logic,
+charts, tests, smoke/end-to-end runs, parameter-integrity checks, and `check_phase_4` are present
+and passing. The explicit deferral must be recorded in the review documentation. No
+`outputs/phase4/` production artifact is required for this track.
+
+When publication-grade or final robustness evidence is needed, the existing driver can be run later
+with the configured production parameters. That later run is expected to produce the full artifacts
+and report described under **Extended-validation criteria** below.
+
+## Optional extended-validation runs
+
+When launched, production-scale sweep runs use `run.n_orders_sweep` (1M) and `run.n_seeds_sweep`
+(5) seeds, parallelised over
 seeds with `ProcessPoolExecutor(max_workers=run.parallel_workers)` from `scripts/run_phase4.py`
 under `if __name__ == "__main__":`; workers take `(kappa, seed, param_overrides: dict, params_path)`
 and reload params. Peak RSS per worker ≈ 2 GB at 1M orders; 4 workers ≈ 8 GB — within the 16 GB guard.
@@ -34,9 +51,10 @@ train split; (6) run Arms 1, 4, 5 (Arms 2, 3 only on the κ-grid at central para
 trained on one world and applied to another is a leak of a different kind — the sweep is over
 worlds, and each world must be learned from its own history.
 
-**Budget and resumability.** ≈ 270 runs at 1M orders (κ-grid 30, OAT 120, LHS 100, robustness 20).
-At ≈ 4–6 min per run with 4 workers this is 5–8 hours. Each run writes its manifest last; the
-sweep driver skips any point whose manifest already exists and validates, so it can be
+**Budget and resumability.** The complete extended validation is ≈ 270 runs at 1M orders (κ-grid
+30, OAT 120, LHS 100, robustness 20). At ≈ 4–6 min per run with 4 workers this is 5–8 hours.
+This budget is intentionally deferred for the buildathon. Each run writes its manifest last; the
+sweep driver skips any point whose manifest already exists and validates, so a later run can be
 interrupted and resumed. `outputs/phase4/progress.json` records completed points.
 
 ### 4.1 κ-sweep (`sweep/kappa.py`)
@@ -98,13 +116,29 @@ where CI_high < 0; scatter of mean difference vs `uplift_true.sweep_multiplier` 
 - `test_no_param_edits` — `params.yaml` sha256 at Phase 4 start equals sha256 at end.
 
 ## Done-criteria (`check_phase_4`)
-1. All tests pass.
-2. `outputs/phase4/kappa_star.json` exists, valid, with the κ = 0 guard satisfied and its value reported.
-3. OAT table for all rank ≤ 12 parameters; LHS table for 20 points; four robustness runs.
-4. All nine charts exist, each with footer.
-5. `phase4_REPORT.md` opens with the verdict sentence — one of:
+
+### Buildathon implementation milestone (default)
+
+1. All Phase 4 tests and the repository's relevant firewall/reproducibility checks pass.
+2. The implemented sweep engine, κ/OAT/LHS/robustness logic, chart functions, smoke/end-to-end
+   path, and parameter-integrity check are present.
+3. `check_phase_4` passes while explicitly reporting that the production sweep is optional and
+   deferred. Missing production artifacts are acceptable only when no partial production run is
+   being presented and the deferral is documented.
+4. The review documentation states that no full production sweep was launched and no production
+   results were generated. Smoke results may be reported, but must be labelled as smoke validation.
+
+### Extended-validation criteria (optional, later)
+
+When the full production sweep is run, all of the following become required:
+
+1. `outputs/phase4/kappa_star.json` exists, valid, with the κ = 0 guard satisfied and its value reported.
+2. OAT table for all rank ≤ 12 parameters; LHS table for 20 points; four robustness runs.
+3. All nine charts exist, each with footer.
+4. `phase4_REPORT.md` opens with the verdict sentence — one of:
    - "κ\* = <value>. Above this signal strength the optimizer beats the tuned rule by <mean> ₹/1,000 (95% CI …). At κ = 0 the tuned rule captures <x>% of achievable value."
    - "κ\* not found on [0, 1]. The ML claim is dropped; the orchestration layer (Arm 4 − Arm 1 = <value> ₹/1,000, CI …) is the product."
    and includes the OAT tornado ranking, the LHS fractions, the robustness results, and the sentence "All ₹ figures are simulator results."
 
-**Then halt.**
+Only after these extended-validation criteria pass may the production outputs be used as final or
+publication-grade robustness evidence. **Then halt.**

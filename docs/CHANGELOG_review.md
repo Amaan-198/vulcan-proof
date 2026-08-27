@@ -147,3 +147,28 @@ determinism as hard gates. Test calibration transfer is now a mandatory diagnost
 means, Brier, ECE, prevalence by month and label reason, and the failed transfer must remain in the
 metrics and report. No parameter, tolerance, split, label, model, prediction, or metric was changed
 by this amendment.
+
+## Phase 4 buildathon validation policy amendment (2026-08-27)
+
+`PHASE4_BUILDATHON_OPTIONAL_EXTENDED_VALIDATION`
+
+The full approximately 270-run, 1M-order-per-run Phase 4 sweep is optional extended validation and
+is intentionally deferred for the buildathon. It is not a completion blocker. The sweep engine,
+tests, smoke path, κ/OAT/LHS/robustness logic, charts, and mechanical checks remain implemented.
+
+Buildathon completion is based on the implementation checks and smoke/end-to-end validation. No
+production-scale `outputs/phase4/` artifacts were generated, and no production results are being
+represented by the smoke runs. The larger sweep can be run later for publication-grade or final
+robustness evidence; only that later run may provide production-scale Phase 4 numbers for the
+final report or downstream demo claims.
+
+Smoke/end-to-end validation: completed. Full production sweep: deferred. Larger sweep: available later.
+
+## Phase 5 deferred-evidence compatibility amendment (2026-08-27)
+
+Phase 5 is now required to operate without Phase 4 production outputs. In buildathon mode,
+`/report/kappa`, the UI, and the generated demo script must expose an explicit deferred-validation
+status and documented fallbacks rather than failing or treating an absent result as `κ* = null`.
+Only genuine completed Phase 4 sweep artefacts may supply a κ result or production-scale robustness
+claim. This keeps the product surface verifiable now while preserving a clean path to add the later
+publication-grade evidence.

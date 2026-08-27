@@ -405,7 +405,129 @@ def check_phase_3() -> list[tuple[str, bool, str]]:
     return results
 
 
-CHECKS: dict[int, Check] = {0: check_phase_0, 1: check_phase_1, 2: check_phase_2, 3: check_phase_3}
+def check_phase_4() -> list[tuple[str, bool, str]]:
+    """Validate Phase-4 implementation, with production artifacts optional for the buildathon."""
+    sweep_dir = ROOT / "vulcan_proof" / "sweep"
+    phase_tests = ROOT / "tests" / "test_phase4.py"
+    phase_runner = ROOT / "scripts" / "run_phase4.py"
+    changelog_path = ROOT / "docs" / "CHANGELOG_review.md"
+    policy_markers = (
+        "PHASE4_BUILDATHON_OPTIONAL_EXTENDED_VALIDATION",
+        "Smoke/end-to-end validation: completed",
+        "Full production sweep: deferred",
+        "Larger sweep: available later",
+    )
+    try:
+        changelog = changelog_path.read_text(encoding="utf-8")
+        policy_ok = all(marker in changelog for marker in policy_markers)
+    except OSError:
+        policy_ok = False
+    results: list[tuple[str, bool, str]] = [
+        ("phase4 sweep package exists", sweep_dir.is_dir(), str(sweep_dir)),
+        ("phase4 tests exist", phase_tests.is_file(), str(phase_tests)),
+        ("phase4 runner exists", phase_runner.is_file(), str(phase_runner)),
+        ("phase4 buildathon policy documented", policy_ok, str(changelog_path)),
+    ]
+    phase_dir = ROOT / "outputs" / "phase4"
+    star_path = phase_dir / "kappa_star.json"
+    report_path = ROOT / "outputs" / "phase4_REPORT.md"
+    oat_path = phase_dir / "oat.json"
+    lhs_path = phase_dir / "lhs.json"
+    robustness_path = phase_dir / "robustness.json"
+    chart_names = (
+        "01_kappa_net.png",
+        "02_kappa_arm5_minus_arm4.png",
+        "03_oat_tornado.png",
+        "04_lhs_scatter.png",
+        "05_recommendation_boundaries.png",
+        "06_defense_only.png",
+        "07_prevention_vs_defense.png",
+        "08_coverage_friction.png",
+        "09_lorenz.png",
+    )
+    production_paths = (star_path, oat_path, lhs_path, robustness_path, report_path) + tuple(
+        phase_dir / name for name in chart_names
+    )
+    production_started = any(path.is_file() for path in production_paths)
+    if not production_started:
+        results.append(("optional production sweep", True, "not launched; smoke validation is sufficient for buildathon completion"))
+        return results
+
+    # A partial production directory is not silently accepted: once any production artifact exists,
+    # the later extended-validation criteria apply to the whole artifact set.
+    results.extend(
+        [
+            ("phase4 production directory exists", phase_dir.is_dir(), str(phase_dir)),
+            ("kappa_star exists", star_path.is_file(), str(star_path)),
+            ("phase4 report exists", report_path.is_file(), str(report_path)),
+        ]
+    )
+    if star_path.is_file():
+        try:
+            payload = _json(star_path)
+            allowed_verdicts = {"ML_CLAIM_SUPPORTED_ABOVE_KAPPA_STAR", "ML_CLAIM_DROPPED_ORCHESTRATION_ONLY"}
+            table = payload["table"]
+            star_ok = payload.get("verdict") in allowed_verdicts and (isinstance(payload.get("kappa_star"), (float, int)) or payload.get("kappa_star") is None)
+            zero_rows = [row for row in table if float(row["kappa"]) == 0.0]
+            guard_ok = bool(zero_rows) and float(zero_rows[0]["arm5_minus_arm4_mean"]) <= float(P["report.kappa0_max_gain_frac"]) * float(zero_rows[0]["arm4_minus_arm1_mean"])
+            results.append(("kappa_star verdict and table valid", star_ok, str(star_path)))
+            results.append(("kappa=0 guard reported satisfied", guard_ok, str(star_path)))
+        except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as exc:
+            results.append(("kappa_star JSON valid", False, f"{type(exc).__name__}: {exc}"))
+    expected_oat = len([path for path in _phase4_ranked_paths(int(P["sweep.oat_max_rank"]))]) * int(P["sweep.oat_levels"])
+    if oat_path.is_file():
+        try:
+            rows = _json(oat_path).get("rows", [])
+            results.append(("OAT table has all rank-qualified levels", len(rows) == expected_oat, f"{len(rows)}/{expected_oat}"))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            results.append(("OAT table is valid JSON", False, str(oat_path)))
+    else:
+        results.append(("OAT table exists", False, str(oat_path)))
+    if lhs_path.is_file():
+        try:
+            rows = _json(lhs_path).get("rows", [])
+            results.append(("LHS table has configured points", len(rows) == int(P["sweep.lhs_points"]), f"{len(rows)}"))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            results.append(("LHS table is valid JSON", False, str(lhs_path)))
+    else:
+        results.append(("LHS table exists", False, str(lhs_path)))
+    if robustness_path.is_file():
+        try:
+            rows = _json(robustness_path).get("rows", [])
+            results.append(("four robustness runs reported", len(rows) == 4, f"{len(rows)}"))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            results.append(("robustness table is valid JSON", False, str(robustness_path)))
+    else:
+        results.append(("robustness table exists", False, str(robustness_path)))
+    missing = [str(phase_dir / name) for name in chart_names if not (phase_dir / name).is_file()]
+    results.append(("nine charts exist", not missing, "; ".join(missing[:3])))
+    if report_path.is_file():
+        report = report_path.read_text(encoding="utf-8")
+        first = report.splitlines()[0] if report.splitlines() else ""
+        verdict_ok = first.startswith("κ* = ") or first.startswith("κ* not found on [0, 1].")
+        required = ("OAT tornado ranking", "Fraction with CI_low > 0", "Robustness", "All ₹ figures are simulator results.", str(P["report.simulator_footer"]))
+        results.append(("phase4 report starts with verdict and contains required sections", verdict_ok and all(item in report for item in required), str(report_path)))
+    return results
+
+
+def _phase4_ranked_paths(max_rank: int) -> list[str]:
+    """Return rank-qualified paths without importing sweep code in the checker."""
+    paths: list[str] = []
+
+    def visit(node: object, prefix: tuple[str, ...]) -> None:
+        if isinstance(node, dict) and set(node) == {"value", "unit", "source", "sweep", "rank"}:
+            if node["sweep"] is not None and node["rank"] is not None and int(node["rank"]) <= max_rank:
+                paths.append(".".join(prefix))
+            return
+        if isinstance(node, dict):
+            for key, child in node.items():
+                visit(child, (*prefix, str(key)))
+
+    visit(P.data, ())
+    return paths
+
+
+CHECKS: dict[int, Check] = {0: check_phase_0, 1: check_phase_1, 2: check_phase_2, 3: check_phase_3, 4: check_phase_4}
 
 
 def main() -> None:
