@@ -53,6 +53,63 @@ OLIST_LABELS: Schema = OrderedDict(
 )
 
 
+def _sim_observed_schema() -> Schema:
+    """Build the Phase-1 observed-order schema from the parameter allowlist."""
+    dtypes: dict[str, str] = {
+        "order_id": "string",
+        "merchant_id": "string",
+        "customer_id": "string",
+        "category": "category",
+        "order_value": "float32",
+        "payment_method": "category",
+        "network": "category",
+        "issuer_family": "category",
+        "new_customer": "int8",
+        "address_mismatch": "int8",
+        "prior_disputes": "int16",
+        "account_age_days": "float32",
+        "cart_items": "int16",
+        "hour_of_day": "int8",
+        "month": "int8",
+        "merchant_order_count": "int32",
+        "merchant_dispute_rate_hist": "float32:nullable",
+        "merchant_contest_rate_hist": "float32:nullable",
+        "merchant_compliance_hist": "float32:nullable",
+        "verified_contact_available": "int8",
+        "ack_optin": "int8",
+        "eligible_tier": "category",
+        "decision_date": "int32",
+        "split": "category",
+        "censored": "int8",
+        "order_day": "int32",
+    }
+    return OrderedDict((column, dtypes[column]) for column in P["features.permitted"] + ["split", "censored", "order_day"])
+
+
+ORDER_OBSERVED = _sim_observed_schema()
+ORDER_HIDDEN: Schema = OrderedDict(
+    [
+        ("order_id", "string"),
+        ("hidden_truth", "category"),
+        ("hidden_z_risk", "float32"),
+        ("hidden_z_type", "float32"),
+        ("hidden_risk_mult", "float32"),
+        ("hidden_quality", "float32"),
+        ("hidden_carrier_reliability", "float32"),
+        ("hidden_archetype", "category"),
+        ("hidden_compliance", "float32"),
+        ("hidden_contest_base", "float32"),
+        ("hidden_requested_bitmask", "uint16"),
+        ("hidden_random_stratum", "int8"),
+        ("hidden_dispute_potential", "int8"),
+        ("hidden_dispute_type", "category:nullable"),
+        ("hidden_dispute_open_day", "int32:nullable"),
+        ("hidden_resolution_day", "int32:nullable"),
+        ("hidden_u_response", "float32"),
+    ]
+)
+
+
 def _is_nullable(dtype: str) -> bool:
     return dtype.endswith(":nullable")
 
@@ -75,13 +132,20 @@ def _dtype_matches(series: pd.Series, expected: str) -> bool:
     if expected == "int16":
         return series.dtype == "int16"
     if expected == "int32":
-        return series.dtype == "int32"
+        return str(series.dtype) in {"int32", "Int32"}
+    if expected == "uint16":
+        return str(series.dtype) == "uint16"
     return False
 
 
 def check(df: pd.DataFrame, name: str, allow_extra: bool = False) -> pd.DataFrame:
     """Validate exact columns, dtypes, and nullability for a named schema."""
-    schemas: dict[str, Schema] = {"OLIST_ORDER_FEATURES": OLIST_ORDER_FEATURES, "OLIST_LABELS": OLIST_LABELS}
+    schemas: dict[str, Schema] = {
+        "OLIST_ORDER_FEATURES": OLIST_ORDER_FEATURES,
+        "OLIST_LABELS": OLIST_LABELS,
+        "ORDER_OBSERVED": ORDER_OBSERVED,
+        "ORDER_HIDDEN": ORDER_HIDDEN,
+    }
     if name not in schemas:
         raise KeyError(name)
     schema = schemas[name]
@@ -89,6 +153,8 @@ def check(df: pd.DataFrame, name: str, allow_extra: bool = False) -> pd.DataFram
     actual = set(df.columns)
     missing = expected - actual
     extra = actual - expected
+    if tuple(df.columns) != tuple(schema) and not allow_extra:
+        raise SchemaError(f"{name} columns are not in declared order")
     if missing:
         raise SchemaError(f"{name} is missing columns: {sorted(missing)}")
     if extra and not allow_extra:
@@ -107,7 +173,12 @@ def check(df: pd.DataFrame, name: str, allow_extra: bool = False) -> pd.DataFram
 
 def cast(df: pd.DataFrame, name: str) -> pd.DataFrame:
     """Cast a frame to a named schema and validate it."""
-    schemas: dict[str, Schema] = {"OLIST_ORDER_FEATURES": OLIST_ORDER_FEATURES, "OLIST_LABELS": OLIST_LABELS}
+    schemas: dict[str, Schema] = {
+        "OLIST_ORDER_FEATURES": OLIST_ORDER_FEATURES,
+        "OLIST_LABELS": OLIST_LABELS,
+        "ORDER_OBSERVED": ORDER_OBSERVED,
+        "ORDER_HIDDEN": ORDER_HIDDEN,
+    }
     if name not in schemas:
         raise KeyError(name)
     schema = schemas[name]
