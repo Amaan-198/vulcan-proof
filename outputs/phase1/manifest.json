@@ -33,7 +33,7 @@
     "train": 8.575679658344922e-06,
     "validate": 0.00010978153474585575
   },
-  "dirty_allowed": true,
+  "dirty_allowed": false,
   "evidence_requests": {
     "AckFirst": {
       "ack": 267956,
@@ -102,8 +102,8 @@
       "weight": 6361
     }
   },
-  "git_clean_at_start": false,
-  "git_commit": "bd769f4019f79e97b4ed050b7e5442a53c4dd591",
+  "git_clean_at_start": true,
+  "git_commit": "517810bb1e718e4b773d284fd6528c5f259e693b",
   "hostname": "LAPTOP-OJK02O15",
   "installed_versions": {
     "PyYAML": "6.0.3",
@@ -184,12 +184,12 @@
   "n_orders": 3000000,
   "otp_signature_corequest": 81569,
   "params_sha256": "d7ca037d9c04dcda57c8b1e3fa24394a5206176ba9276d788792872bf4ab2157",
-  "peak_rss_mb": 1455.875,
+  "peak_rss_mb": 1457.78125,
   "phase": "phase1",
   "python_version": "3.13.12 (tags/v3.13.12:1cbe481, Feb  3 2026, 18:22:25) [MSC v.1944 64 bit (AMD64)]",
   "seed": 20260826,
   "shift_enabled": false,
   "theta_path": "D:\\Projects\\RazorPay\\outputs\\theta.json",
-  "timestamp": "2026-08-27T12:19:05.785847+00:00",
-  "wall_seconds": 31.36964530000114
+  "timestamp": "2026-08-27T12:25:29.354589+00:00",
+  "wall_seconds": 31.49313340000117
 }

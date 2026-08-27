@@ -110,6 +110,41 @@ ORDER_HIDDEN: Schema = OrderedDict(
 )
 
 
+PLAN: Schema = OrderedDict(
+    [
+        ("order_id", "string"),
+        ("requested_bitmask", "uint16"),
+    ]
+)
+
+
+OUTCOME: Schema = OrderedDict(
+    [
+        ("order_id", "string"),
+        ("arm_id", "string"),
+        ("requested_bitmask", "uint16"),
+        ("complied", "int8"),
+        ("materialised_bitmask", "uint16"),
+        ("wrong_recipient", "int8"),
+        ("cash_cost", "float32"),
+        ("time_cost", "float32"),
+        ("ack_sent", "int8"),
+        ("response", "category"),
+        ("prevented", "int8"),
+        ("prevention_mode", "category:nullable"),
+        ("dispute_opened", "int8"),
+        ("dispute_type", "category:nullable"),
+        ("contested", "int8"),
+        ("won", "int8"),
+        ("value", "float32"),
+        ("net", "float32"),
+        ("censored", "int8"),
+        ("split", "category"),
+        ("claim_class", "category"),
+    ]
+)
+
+
 def _is_nullable(dtype: str) -> bool:
     return dtype.endswith(":nullable")
 
@@ -145,6 +180,8 @@ def check(df: pd.DataFrame, name: str, allow_extra: bool = False) -> pd.DataFram
         "OLIST_LABELS": OLIST_LABELS,
         "ORDER_OBSERVED": ORDER_OBSERVED,
         "ORDER_HIDDEN": ORDER_HIDDEN,
+        "PLAN": PLAN,
+        "OUTCOME": OUTCOME,
     }
     if name not in schemas:
         raise KeyError(name)
@@ -178,6 +215,8 @@ def cast(df: pd.DataFrame, name: str) -> pd.DataFrame:
         "OLIST_LABELS": OLIST_LABELS,
         "ORDER_OBSERVED": ORDER_OBSERVED,
         "ORDER_HIDDEN": ORDER_HIDDEN,
+        "PLAN": PLAN,
+        "OUTCOME": OUTCOME,
     }
     if name not in schemas:
         raise KeyError(name)

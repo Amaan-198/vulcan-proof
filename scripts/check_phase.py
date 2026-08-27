@@ -223,7 +223,127 @@ def check_phase_1() -> list[tuple[str, bool, str]]:
     return results
 
 
-CHECKS: dict[int, Check] = {0: check_phase_0, 1: check_phase_1}
+def check_phase_2() -> list[tuple[str, bool, str]]:
+    """Validate Phase-2 smoke/canonical artifacts and the paired report."""
+    phase_dir = ROOT / "outputs" / "phase2"
+    report_path = ROOT / "outputs" / "phase2_REPORT.md"
+    results: list[tuple[str, bool, str]] = [
+        ("phase2 directory exists", phase_dir.is_dir(), str(phase_dir)),
+        ("phase2 report exists", report_path.is_file(), str(report_path)),
+    ]
+    seed_count = int(P["run.n_seeds_sweep"])
+    kappas = (0.0, float(P["sim.kappa.canonical"]))
+    max_rss = float(P["run.max_peak_rss_gb"]) * 1024
+    max_censor = float(P["sim.max_censor_frac"])
+
+    def manifest_ok(
+        path: pathlib.Path,
+        *,
+        expected_orders: int,
+        expected_seed: int,
+        expected_kappa: float,
+        canonical: bool,
+    ) -> bool:
+        """Check Phase-2 provenance and resource fields without trusting filenames."""
+        try:
+            manifest = _json(path)
+            identity_ok = (
+                manifest.get("phase") == "phase2"
+                and manifest.get("params_sha256") == P.sha256
+                and manifest.get("n_orders") == expected_orders
+                and manifest.get("seed") == expected_seed
+                and manifest.get("kappa") == expected_kappa
+            )
+            wall = float(manifest["wall_seconds"])
+            rss = float(manifest["peak_rss_mb"])
+            resource_ok = (
+                math.isfinite(wall)
+                and wall >= 0.0
+                and math.isfinite(rss)
+                and 0.0 <= rss <= max_rss
+            )
+            if canonical:
+                resource_ok = resource_ok and wall <= float(P["run.max_canonical_wall_seconds"])
+            censor = manifest["censor_fractions"]
+            censor_ok = all(
+                name in censor
+                and math.isfinite(float(censor[name]))
+                and 0.0 <= float(censor[name]) <= max_censor
+                for name in ("train", "validate", "gap")
+            )
+            return identity_ok and resource_ok and censor_ok
+        except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError):
+            return False
+
+    smoke_missing: list[str] = []
+    smoke_manifest_failures: list[str] = []
+    for kappa in kappas:
+        for seed in range(1, seed_count + 1):
+            directory = phase_dir / "smoke" / f"kappa_{str(kappa).replace('-', 'm').replace('.', 'p')}" / f"seed_{seed}"
+            manifest_path = directory / "manifest.json"
+            if not manifest_ok(
+                manifest_path,
+                expected_orders=int(P["run.n_orders_smoke"]),
+                expected_seed=seed,
+                expected_kappa=kappa,
+                canonical=False,
+            ):
+                smoke_manifest_failures.append(str(manifest_path))
+            for arm in ("arm0", "arm1", "arm2", "arm3", "arm4"):
+                path = directory / f"outcome_{arm}.parquet"
+                if not path.is_file():
+                    smoke_missing.append(str(path))
+            if not (directory / "observed_orders.parquet").is_file():
+                smoke_missing.append(str(directory / "observed_orders.parquet"))
+            if not (directory / "arm4_policy.json").is_file():
+                smoke_missing.append(str(directory / "arm4_policy.json"))
+    results.append(("smoke outcomes and policy artifacts exist", not smoke_missing, "; ".join(smoke_missing[:3])))
+    results.append(("smoke manifests valid and within limits", not smoke_manifest_failures, "; ".join(smoke_manifest_failures[:3])))
+    canonical_missing: list[str] = []
+    canonical_manifest_failures: list[str] = []
+    canonical_kappa = float(P["sim.kappa.canonical"])
+    for seed in range(1, seed_count + 1):
+        directory = phase_dir / "canonical" / f"kappa_{str(canonical_kappa).replace('-', 'm').replace('.', 'p')}" / f"seed_{seed}"
+        manifest_path = directory / "manifest.json"
+        if not manifest_ok(
+            manifest_path,
+            expected_orders=int(P["run.n_orders_sweep"]),
+            expected_seed=seed,
+            expected_kappa=canonical_kappa,
+            canonical=True,
+        ):
+            canonical_manifest_failures.append(str(manifest_path))
+        for arm in ("arm0", "arm1", "arm4"):
+            path = directory / f"outcome_{arm}.parquet"
+            if not path.is_file():
+                canonical_missing.append(str(path))
+    results.append(("canonical outcomes exist", not canonical_missing, "; ".join(canonical_missing[:3])))
+    results.append(("canonical manifests valid and within limits", not canonical_manifest_failures, "; ".join(canonical_manifest_failures[:3])))
+    sample = next(iter(sorted(phase_dir.glob("smoke/**/outcome_arm4.parquet"))), None) if phase_dir.is_dir() else None
+    if sample is not None:
+        try:
+            frame = pd.read_parquet(sample)
+            check(frame, "OUTCOME")
+            results.append(("sample outcome schema valid", True, str(sample)))
+        except Exception as exc:
+            results.append(("sample outcome schema valid", False, f"{type(exc).__name__}: {exc}"))
+    else:
+        results.append(("sample outcome schema valid", False, "no outcome_arm4 parquet"))
+    if report_path.is_file():
+        report = report_path.read_text(encoding="utf-8")
+        required = (
+            "Arm 4 − Arm 1 net",
+            "Arm 4 − Arm 2 net",
+            "Defense-only win rates by claim class",
+            "Arm 4 policy table",
+            "Realised implied_phi",
+            str(P["report.simulator_footer"]),
+        )
+        results.append(("phase2 report contains required sections", all(item in report for item in required), str(report_path)))
+    return results
+
+
+CHECKS: dict[int, Check] = {0: check_phase_0, 1: check_phase_1, 2: check_phase_2}
 
 
 def main() -> None:
