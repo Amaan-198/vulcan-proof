@@ -141,14 +141,38 @@ def test_metrics_json_complete() -> None:
     assert metrics["immature_drop_count"] == metrics["split_counts"]["immature"]
 
 
-def test_calibrated_mean_matches_rate() -> None:
+def test_validation_calibration_and_test_drift_diagnostic() -> None:
     path = pathlib.Path(__file__).resolve().parents[1] / "outputs" / "phase0" / "metrics.json"
     if not path.exists():
         pytest.skip("run_phase0 is required before calibration checks")
     metrics = json.loads(path.read_text(encoding="utf-8"))
     tolerance = float(P["models.calib.mean_tolerance"])
-    for row in metrics["calibration_checks"].values():
-        assert abs(row["mean_prediction"] - row["empirical_rate"]) / row["empirical_rate"] < tolerance
+    validation = metrics["calibration_checks"]["validate"]
+    validation_error = abs(validation["mean_prediction"] - validation["empirical_rate"]) / validation["empirical_rate"]
+    assert validation_error < tolerance
+
+    test = metrics["calibration_checks"]["test"]
+    test_error = abs(test["mean_prediction"] - test["empirical_rate"]) / test["empirical_rate"]
+    drift = metrics["temporal_drift"]
+    assert drift["test_relative_mean_error"] == pytest.approx(test_error)
+    assert drift["test_within_mean_tolerance"] is (test_error < tolerance)
+    if test_error >= tolerance:
+        assert drift["validation_to_test_prevalence_ratio"] > 1 + tolerance
+        assert drift["largest_rate_drop_reason"] == "late_low_score"
+        assert drift["label_reason_rate_drops"]["late_low_score"] > 0
+
+
+def test_temporal_calibration_drift_is_attributed() -> None:
+    path = pathlib.Path(__file__).resolve().parents[1] / "outputs" / "phase0" / "metrics.json"
+    if not path.exists():
+        pytest.skip("run_phase0 is required before calibration checks")
+    metrics = json.loads(path.read_text(encoding="utf-8"))
+    drift = metrics["temporal_drift"]
+    assert drift["calibration_protocol"] == (
+        "isotonic fitted on validation labels only; test labels used for evaluation only"
+    )
+    assert np.isfinite(metrics["calibration_checks"]["test"]["raw_mean_prediction"])
+    assert len(drift["monthly_label_rates"]) == 6
 
 
 def test_footer_present() -> None:

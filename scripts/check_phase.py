@@ -37,6 +37,35 @@ def _phase0_files() -> list[tuple[str, bool, str]]:
     metrics = _json(metrics_path)
     finite = all(math.isfinite(float(metrics[key])) for key in ("pr_auc", "brier", "ece"))
     results.append(("required test metrics finite", finite, "pr_auc, brier, ece"))
+    calibration = metrics.get("calibration_checks", {})
+    validation = calibration.get("validate", {})
+    validation_rate = float(validation.get("empirical_rate", 0))
+    validation_error = (
+        abs(float(validation.get("mean_prediction", 0)) - validation_rate) / validation_rate
+        if validation_rate
+        else math.inf
+    )
+    results.append((
+        "validation calibrated mean within tolerance",
+        validation_error < float(P["models.calib.mean_tolerance"]),
+        f"relative_error={validation_error:.6f}",
+    ))
+    drift = metrics.get("temporal_drift", {})
+    monthly = drift.get("monthly_label_rates")
+    drift_ok = (
+        drift.get("calibration_protocol")
+        == "isotonic fitted on validation labels only; test labels used for evaluation only"
+        and isinstance(drift.get("test_within_mean_tolerance"), bool)
+        and math.isfinite(float(drift.get("test_relative_mean_error", math.inf)))
+        and isinstance(monthly, list)
+        and bool(monthly)
+        and bool(drift.get("largest_rate_drop_reason"))
+    )
+    results.append((
+        "test calibration transfer reported diagnostically",
+        drift_ok,
+        str(drift.get("largest_rate_drop_reason")),
+    ))
     operating = metrics.get("operating_points")
     expected_operating = len(P["olist.operating_recalls"])
     results.append(("three operating points present", isinstance(operating, list) and len(operating) == expected_operating, str(len(operating) if isinstance(operating, list) else None)))

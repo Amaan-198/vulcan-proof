@@ -7,6 +7,8 @@ import json
 import pathlib
 from typing import Any
 
+import pandas as pd
+
 from ..manifest import finish_run, start_run, write_artifact
 from ..params import P, Params
 from .charts import write_charts
@@ -20,6 +22,60 @@ from .train import calibration_summary, fit_detector
 
 def _read_metric(path: pathlib.Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _temporal_drift_diagnostics(
+    split_labels: pd.DataFrame,
+    calibration_checks: dict[str, dict[str, float]],
+    params: Params,
+) -> dict[str, Any]:
+    """Attribute out-of-time prevalence movement without altering predictions."""
+    selected = split_labels.loc[split_labels["split"].isin({"validate", "test"})].copy()
+    selected["month"] = selected["purchase_ts"].dt.to_period("M").astype("string")
+    positive_reasons = sorted(
+        reason for reason in selected["label_reason"].astype(str).unique() if reason != "none"
+    )
+    monthly: list[dict[str, Any]] = []
+    for split_name in ("validate", "test"):
+        split_frame = selected.loc[selected["split"].eq(split_name)]
+        for month, group in split_frame.groupby("month", sort=True):
+            reason_counts = group["label_reason"].astype(str).value_counts()
+            row: dict[str, Any] = {
+                "split": split_name,
+                "month": str(month),
+                "n_orders": int(len(group)),
+                "label_rate": float(group["label"].mean()),
+            }
+            for reason in positive_reasons:
+                row[f"{reason}_rate"] = float(reason_counts.get(reason, 0) / len(group))
+            monthly.append(row)
+
+    reason_rates: dict[str, dict[str, float]] = {}
+    for split_name in ("validate", "test"):
+        group = selected.loc[selected["split"].eq(split_name)]
+        counts = group["label_reason"].astype(str).value_counts()
+        reason_rates[split_name] = {
+            reason: float(counts[reason] / len(group)) for reason in positive_reasons
+        }
+    drops = {
+        reason: reason_rates["validate"][reason] - reason_rates["test"][reason]
+        for reason in positive_reasons
+    }
+    largest_drop_reason = max(drops, key=drops.__getitem__)
+    test_check = calibration_checks["test"]
+    relative_error = abs(test_check["mean_vs_rate_ratio"] - 1.0)
+    return {
+        "calibration_protocol": "isotonic fitted on validation labels only; test labels used for evaluation only",
+        "test_within_mean_tolerance": relative_error < float(params["models.calib.mean_tolerance"]),
+        "test_relative_mean_error": relative_error,
+        "validation_to_test_prevalence_ratio": (
+            calibration_checks["validate"]["empirical_rate"] / test_check["empirical_rate"]
+        ),
+        "label_reason_rates": reason_rates,
+        "label_reason_rate_drops": drops,
+        "largest_rate_drop_reason": largest_drop_reason,
+        "monthly_label_rates": monthly,
+    }
 
 
 def _write_report(
@@ -62,14 +118,17 @@ def _write_report(
             f"{row['fp_cost_inr_per_1000']:.3f} |"
         )
     test_calibration = metrics["calibration_checks"]["test"]
-    calibration_tolerance = float(P["models.calib.mean_tolerance"])
-    test_relative_error = abs(test_calibration["mean_vs_rate_ratio"] - 1.0)
-    if test_relative_error > calibration_tolerance:
+    validation_calibration = metrics["calibration_checks"]["validate"]
+    validation_error = abs(validation_calibration["mean_vs_rate_ratio"] - 1.0)
+    validation_ok = validation_error < float(P["models.calib.mean_tolerance"])
+    drift = metrics["temporal_drift"]
+    if not drift["test_within_mean_tolerance"]:
         calibration_note = (
             "Calibration note: validation-only isotonic calibration matches the validation rate, "
             f"but the test mean/rate ratio is {test_calibration['mean_vs_rate_ratio']:.6f}. "
-            "This is recorded as temporal prevalence drift between the validation and test windows; "
-            "test labels were not used for calibration."
+            "The raw model mean also exceeds the test prevalence, and the largest label-rate drop is "
+            f"{drift['largest_rate_drop_reason']}. This is temporal outcome drift; test labels were "
+            "used for evaluation only, never calibration or tuning."
         )
     else:
         calibration_note = (
@@ -82,6 +141,27 @@ def _write_report(
             f"Split counts: {metrics['split_counts']}",
             f"Calibration checks: {metrics['calibration_checks']}",
             calibration_note,
+            "",
+            "Temporal prevalence diagnostics:",
+            "",
+            "| Split | Month | Orders | Label rate | Late/low-score rate | Comment-match rate | Not-delivered rate |",
+            "|---|---|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for row in drift["monthly_label_rates"]:
+        lines.append(
+            f"| {row['split']} | {row['month']} | {row['n_orders']} | {row['label_rate']:.6f} | "
+            f"{row['late_low_score_rate']:.6f} | {row['comment_match_rate']:.6f} | "
+            f"{row['not_delivered_rate']:.6f} |"
+        )
+    manifest = _read_metric(manifest_path)
+    lines.extend(
+        [
+            "",
+            f"Validation calibration gate: {'PASS' if validation_ok else 'FAIL'}",
+            "Test calibration-transfer diagnostic: "
+            f"{'WITHIN TOLERANCE' if drift['test_within_mean_tolerance'] else 'OUT OF TOLERANCE — reported temporal drift, non-blocking'}",
+            f"Clean-tree manifest gate: {'PASS' if manifest['git_clean_at_start'] else 'FAIL'}",
             "",
             "Olist has no chargeback or evidence data; this measures detection only.",
             "",
@@ -129,6 +209,7 @@ def run_phase0(
         test_metrics = evaluate_predictions(test_y, test_scores, params)
         validation = calibration_summary(detector, features, mature_labels, mature, "validate")
         test_calibration = calibration_summary(detector, features, mature_labels, mature, "test")
+        calibration_checks = {"validate": validation, "test": test_calibration}
         label_summary = label_statistics(labels, int(excluded_statuses.sum()))
         split_counts = split_statistics(assigned)
         metrics: dict[str, Any] = {
@@ -138,8 +219,9 @@ def run_phase0(
             # Count only eligible labelled orders, using the exact same boundary
             # as assign_splits.  Counting raw orders included excluded statuses
             # and made this value disagree with split_counts["immature"].
-            "immature_drop_count": split_counts.get("immature", 0),
-            "calibration_checks": {"validate": validation, "test": test_calibration},
+            "immature_drop_count": split_counts["immature"],
+            "calibration_checks": calibration_checks,
+            "temporal_drift": _temporal_drift_diagnostics(mature, calibration_checks, params),
             "olist_footer": params["report.olist_footer"],
             "params_sha256": params.sha256,
         }

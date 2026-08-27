@@ -112,14 +112,16 @@ def calibration_summary(
     split_labels: pd.DataFrame,
     split_name: str,
 ) -> dict[str, float]:
-    """Summarise calibrated mean versus empirical rate for one split."""
+    """Summarise raw and calibrated means versus empirical rate for one split."""
     mask = split_labels["split"].eq(split_name).to_numpy()
-    scores = detector.predict(features.loc[mask])
+    raw_scores = detector.predict_raw(features.loc[mask])
+    scores = np.asarray(detector.calibrator.predict(raw_scores), dtype="float64")
     y = labels.loc[mask, "label"].to_numpy(dtype="int8")
     rate = float(y.mean())
     mean = float(scores.mean())
     ratio = mean / rate if rate else float("inf")
     return {
+        "raw_mean_prediction": float(raw_scores.mean()),
         "mean_prediction": mean,
         "empirical_rate": rate,
         "mean_vs_rate_ratio": ratio,

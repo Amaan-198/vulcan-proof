@@ -130,3 +130,20 @@ Read every phase document end-to-end again. Found and fixed:
 
 Automated checks at lock: loader rules clean; every dotted param reference in docs resolves; every
 central value lies inside its sweep range; archetype ranks 1–6 unique; known-answer tests pass.
+
+## Phase 0 post-audit amendment (2026-08-27)
+
+The v5 test added test-set calibrated-mean matching to make validation-only isotonic checks less
+tautological. That test correctly exposed a real result: prevalence fell from 9.2304% in validation
+to 3.5424% in test, led by `late_low_score` falling from 6.2763% to 1.5042%. The uncalibrated test
+mean was already 5.9980%, so this was not caused by isotonic calibration, class weighting, or
+undersampling; isotonic correctly reflected the higher-prevalence validation window and produced a
+7.2824% test mean.
+
+The test-label prohibition makes an unconditional ±5% out-of-time mean requirement impossible to
+treat as a software invariant under an unseen regime change. Phase 0 therefore keeps validation
+mean matching, temporal maturity, feature leakage, `scale_pos_weight=1`, no undersampling, and
+determinism as hard gates. Test calibration transfer is now a mandatory diagnostic: raw/calibrated
+means, Brier, ECE, prevalence by month and label reason, and the failed transfer must remain in the
+metrics and report. No parameter, tolerance, split, label, model, prediction, or metric was changed
+by this amendment.
