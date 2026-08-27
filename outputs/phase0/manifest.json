@@ -11,9 +11,9 @@
       "sha256": "0f3752037fd82451467a6bafa0329dd8c6aacd4da214a052ee1e6419e0e1f3ca"
     }
   ],
-  "dirty_allowed": true,
-  "git_clean_at_start": false,
-  "git_commit": "842eeaf0d17c16f45369f991151e1e3164587578",
+  "dirty_allowed": false,
+  "git_clean_at_start": true,
+  "git_commit": "ba7883059329ec7c9a1d7f9eec34e17496745954",
   "hostname": "LAPTOP-OJK02O15",
   "installed_versions": {
     "PyYAML": "6.0.3",
@@ -91,11 +91,11 @@
   "lgbm_threads_in_worker": 1,
   "master_seed": 20260826,
   "metrics_path": "D:\\Projects\\RazorPay\\outputs\\phase0\\metrics.json",
-  "metrics_sha256": "0b20c1980eb1b4283db79be93b4b9597016e0ed6636426be8dcbc19d553ed46d",
+  "metrics_sha256": "4a8a6c058824c088c0c325fb0b7d2749dc83cdc690a1ac3f87b3a2b779dcbc92",
   "params_sha256": "d7ca037d9c04dcda57c8b1e3fa24394a5206176ba9276d788792872bf4ab2157",
-  "peak_rss_mb": 465.60546875,
+  "peak_rss_mb": 464.8359375,
   "phase": "phase0",
   "python_version": "3.13.12 (tags/v3.13.12:1cbe481, Feb  3 2026, 18:22:25) [MSC v.1944 64 bit (AMD64)]",
-  "timestamp": "2026-08-27T10:54:12.662206+00:00",
-  "wall_seconds": 7.866567099999884
+  "timestamp": "2026-08-27T11:11:56.012323+00:00",
+  "wall_seconds": 11.069150100000115
 }
