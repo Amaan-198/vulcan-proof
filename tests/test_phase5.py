@@ -48,6 +48,53 @@ def test_api_plan_matches_arm5_artifact(phase5_service) -> None:
     assert phase5_service.plan(order_id)["plan"]["requested_bitmask"] == expected
 
 
+def test_order_picker_does_not_hide_non_empty_plans(phase5_service) -> None:
+    """The first picker page must expose stored evidence-bearing orders."""
+    visible = phase5_service.orders(category="Electronics", limit=36)["orders"]
+    assert any(phase5_service._stored_mask(item["order_id"]) != 0 for item in visible)
+
+
+def test_order_picker_can_focus_on_plan_examples(phase5_service) -> None:
+    """The demo-only view returns only stored evidence-bearing orders."""
+    payload = phase5_service.orders(category="Electronics", limit=36, plans_only=True)
+    assert payload["plans_only"] is True
+    assert payload["orders"]
+    assert all(item["has_plan"] for item in payload["orders"])
+
+
+def test_order_picker_can_focus_on_package_ready_examples(phase5_service) -> None:
+    """Package-ready filtering returns only opened disputes with captured evidence."""
+    payload = phase5_service.orders(
+        category="Electronics",
+        limit=36,
+        plans_only=True,
+        package_ready_only=True,
+    )
+    assert payload["package_ready_only"] is True
+    assert payload["orders"]
+    assert all(item["has_plan"] and item["package_available"] for item in payload["orders"])
+
+
+def test_order_picker_prioritizes_package_ready_examples(phase5_service) -> None:
+    """The compact demo page keeps package-ready rows ahead of plan-only rows."""
+    for category in ("Electronics", "Jewellery", "Apparel", "Home", "FMCG"):
+        rows = phase5_service.orders(category=category, limit=5, plans_only=True)["orders"]
+        ready_positions = [index for index, row in enumerate(rows) if row["package_available"]]
+        assert ready_positions == list(range(len(ready_positions)))
+
+
+def test_plan_reports_when_package_is_unavailable(phase5_service) -> None:
+    """A selected plan can exist without an opened dispute package."""
+    outcome = phase5_service.arm5_outcome
+    plan_only = outcome.loc[
+        outcome["requested_bitmask"].ne(0)
+        & (~outcome["dispute_opened"].astype(bool) | outcome["materialised_bitmask"].eq(0))
+    ].iloc[0]
+    payload = phase5_service.plan(str(plan_only["order_id"]))
+    assert payload["plan"]["requested_bitmask"] != 0
+    assert payload["package_available"] is False
+
+
 def test_llm_explanation_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("VP_EXPLAIN_LLM", raising=False)
     from vulcan_proof.api.main import explain

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 const EVIDENCE_ORDER = ["weight", "serial", "sealed", "packing", "geotag", "otp", "signature", "ack", "vack"];
+const DEMO_ORDER_LIMIT = 5;
 
 const navItems = [
   { id: "order", label: "Order", short: "01" },
@@ -49,6 +50,8 @@ function App() {
   const [orders, setOrders] = useState([]);
   const [category, setCategory] = useState("Electronics");
   const [query, setQuery] = useState("");
+  const [plansOnly, setPlansOnly] = useState(true);
+  const [packageReadyOnly, setPackageReadyOnly] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const [plan, setPlan] = useState(null);
   const [pkg, setPkg] = useState(null);
@@ -60,7 +63,7 @@ function App() {
   useEffect(() => {
     let active = true;
     Promise.all([
-      getJson(`/orders?category=${encodeURIComponent(category)}&limit=36`),
+      getJson(`/orders?category=${encodeURIComponent(category)}&limit=${DEMO_ORDER_LIMIT}&plans_only=${plansOnly}&package_ready_only=${packageReadyOnly}`),
       getJson("/report/kappa"),
       getJson("/demo/script").catch(() => null),
     ])
@@ -69,14 +72,13 @@ function App() {
         setReport(reportData);
         const scriptId = script?.beats?.find((beat) => beat.beat === 1)?.order_id;
         const preferredId = category === "Electronics" ? scriptId : orderData.orders?.[0]?.order_id;
-        const firstId = preferredId || orderData.orders?.[0]?.order_id || "";
         let visibleOrders = orderData.orders || [];
         if (category === "Electronics" && scriptId && !visibleOrders.some((order) => order.order_id === scriptId)) {
-          const featured = await getJson(`/orders?query=${encodeURIComponent(scriptId)}&limit=1`);
+          const featured = await getJson(`/orders?query=${encodeURIComponent(scriptId)}&limit=1&plans_only=${plansOnly}&package_ready_only=${packageReadyOnly}`);
           visibleOrders = [...(featured.orders || []), ...visibleOrders];
         }
         setOrders(visibleOrders);
-        setSelectedId(firstId);
+        setSelectedId(preferredId && visibleOrders.some((order) => order.order_id === preferredId) ? preferredId : visibleOrders[0]?.order_id || "");
         setLoading(false);
       })
       .catch((reason) => {
@@ -87,7 +89,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [category]);
+  }, [category, plansOnly, packageReadyOnly]);
 
   const filteredOrders = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -114,6 +116,11 @@ function App() {
 
   async function openPackage() {
     if (!selectedId) return;
+    if (plan?.order?.order_id === selectedId && plan.package_available !== true) {
+      setScreen("plan");
+      setError("");
+      return;
+    }
     setScreen("package");
     setDetailLoading(true);
     setError("");
@@ -133,6 +140,11 @@ function App() {
       return;
     }
     if (next === "package") {
+      if (!plan || plan.order?.order_id !== selectedId) {
+        if (selectedId) openPlan(selectedId);
+        else setScreen("order");
+        return;
+      }
       openPackage();
       return;
     }
@@ -188,6 +200,10 @@ function App() {
                   setCategory={setCategory}
                   query={query}
                   setQuery={setQuery}
+                  plansOnly={plansOnly}
+                  setPlansOnly={setPlansOnly}
+                  packageReadyOnly={packageReadyOnly}
+                  setPackageReadyOnly={setPackageReadyOnly}
                   orders={filteredOrders}
                   selectedId={selectedId}
                   setSelectedId={setSelectedId}
@@ -232,7 +248,7 @@ function PageIntro({ eyebrow, title, copy, action }) {
   );
 }
 
-function OrderScreen({ category, setCategory, query, setQuery, orders, selectedId, setSelectedId, selectedOrder, openPlan }) {
+function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPlansOnly, packageReadyOnly, setPackageReadyOnly, orders, selectedId, setSelectedId, selectedOrder, openPlan }) {
   const categories = ["Electronics", "Jewellery", "Apparel", "Home", "FMCG"];
   return (
     <>
@@ -245,14 +261,16 @@ function OrderScreen({ category, setCategory, query, setQuery, orders, selectedI
       <div className="order-layout">
         <section className="panel order-browser">
           <div className="panel-heading compact-heading">
-            <div><h2>Test orders</h2><span className="muted">Canonical Phase 3 slice</span></div>
-            <span className="result-count">{orders.length} shown</span>
+            <div><h2>Test orders</h2><span className="muted">{packageReadyOnly ? "Stored orders with dispute packages" : plansOnly ? "Stored orders with evidence plans" : "Canonical Phase 3 slice"}</span></div>
+            <span className="result-count">{orders.length} {packageReadyOnly ? "package-ready" : plansOnly ? "plan examples" : "shown"}</span>
           </div>
           <div className="filter-row">
             <div className="search-field"><span className="search-icon">⌕</span><input aria-label="Search orders" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search order or merchant" /></div>
             <select aria-label="Filter category" value={category} onChange={(event) => setCategory(event.target.value)}>
               {categories.map((item) => <option key={item}>{item}</option>)}
             </select>
+            <label className="plan-filter"><input aria-label="Show evidence plans only" type="checkbox" checked={plansOnly} onChange={(event) => { setPlansOnly(event.target.checked); if (!event.target.checked) setPackageReadyOnly(false); }} /><span>Plans only</span></label>
+            <label className="plan-filter"><input aria-label="Show package-ready examples only" type="checkbox" checked={packageReadyOnly} disabled={!plansOnly} onChange={(event) => setPackageReadyOnly(event.target.checked)} /><span>Package ready</span></label>
           </div>
           <div className="order-table-wrap">
             <table className="order-table">
@@ -260,7 +278,7 @@ function OrderScreen({ category, setCategory, query, setQuery, orders, selectedI
               <tbody>
                 {orders.map((order) => (
                   <tr className={selectedId === order.order_id ? "selected" : ""} onClick={() => setSelectedId(order.order_id)} key={order.order_id}>
-                    <td><div className="order-cell"><span className="row-radio">{selectedId === order.order_id ? "✓" : ""}</span><span>{order.order_id.replace("order_1_", "#")}</span></div><small>{order.merchant_id}</small></td>
+                    <td><div className="order-cell"><span className="row-radio">{selectedId === order.order_id ? "✓" : ""}</span><span>{order.order_id.replace("order_1_", "#")}</span></div><small>{order.merchant_id} · {order.has_plan ? <><span className="order-status plan-status">evidence plan</span><span className={`order-status ${order.package_available ? "ready-status" : "plan-only-status"}`}>{order.package_available ? "package ready" : "plan only"}</span></> : <span className="order-status empty-status">no evidence selected</span>}</small></td>
                     <td><span className={`category-tag ${categoryColors[order.category] || "slate"}`}>{order.category}</span></td>
                     <td className="money-cell">{money(order.order_value)}</td>
                     <td><span className="tier-label">{pretty(order.eligible_tier)}</span></td>
@@ -268,7 +286,7 @@ function OrderScreen({ category, setCategory, query, setQuery, orders, selectedI
                 ))}
               </tbody>
             </table>
-            {!orders.length && <div className="empty-table">No matching orders in this slice.</div>}
+            {!orders.length && <div className="empty-table">{packageReadyOnly ? `No package-ready examples are available for ${category} in this world. Turn off “Package ready” to inspect plan examples.` : plansOnly ? `No stored evidence-bearing examples are available for ${category} in this world. Turn off “Plans only” to inspect the full slice.` : "No matching orders in this slice."}</div>}
           </div>
         </section>
 
@@ -351,7 +369,7 @@ function PlanScreen({ plan, loading, openPackage, goBack }) {
       </section>
       <div className="plan-bottom-row">
         <div className="diagnostic-line"><span className="diagnostic-dot" />Model recomputation matches stored plan: <strong>{plan.comparison.model_recomputed_mask_matches_stored ? "yes" : "stored mask retained"}</strong></div>
-        <button className="primary-button" onClick={openPackage} type="button">Open dispute package <span>→</span></button>
+        {plan.package_available ? <button className="primary-button" onClick={openPackage} type="button">Open dispute package <span>→</span></button> : <div className="package-unavailable"><strong>Package not available</strong><span>No opened dispute with captured evidence for this order.</span></div>}
       </div>
     </>
   );

@@ -44,9 +44,17 @@ def orders(
     category: str | None = Query(default=None),
     query: str | None = Query(default=None),
     limit: int | None = Query(default=None),
+    plans_only: bool = Query(default=False),
+    package_ready_only: bool = Query(default=False),
 ) -> dict[str, Any]:
     """Return test orders for the order picker."""
-    return service().orders(category=category, query=query, limit=limit)
+    return service().orders(
+        category=category,
+        query=query,
+        limit=limit,
+        plans_only=plans_only,
+        package_ready_only=package_ready_only,
+    )
 
 
 @app.get("/order/{order_id}/plan")

@@ -132,7 +132,14 @@ class Phase5Service:
                     self._models = fit_models(phase2_observed, historical, self.params, self.seed)
         return self._models
 
-    def orders(self, category: str | None = None, query: str | None = None, limit: int | None = None) -> dict[str, Any]:
+    def orders(
+        self,
+        category: str | None = None,
+        query: str | None = None,
+        limit: int | None = None,
+        plans_only: bool = False,
+        package_ready_only: bool = False,
+    ) -> dict[str, Any]:
         """Return compact test-order rows for the order picker."""
         frame = self._test_rows()
         if category and category != "All":
@@ -143,21 +150,88 @@ class Phase5Service:
                 frame["order_id"].astype(str).str.lower().str.contains(needle, regex=False)
                 | frame["merchant_id"].astype(str).str.lower().str.contains(needle, regex=False)
             ]
-        count = min(int(limit) if limit is not None else 100, 1000)
-        frame = frame.sort_values(["category", "order_value", "order_id"]).head(count)
+        if plans_only or package_ready_only:
+            stored_masks = self.arm5_by_id["requested_bitmask"]
+            has_plan = frame["order_id"].map(stored_masks).fillna(0).astype("int64").ne(0)
+            frame = frame.loc[has_plan]
+        if package_ready_only:
+            opened = frame["order_id"].map(self.arm5_by_id["dispute_opened"]).fillna(False).astype(bool)
+            materialised = frame["order_id"].map(self.arm5_by_id["materialised_bitmask"]).fillna(0).astype("int64").ne(0)
+            frame = frame.loc[opened & materialised]
+        total = len(frame)
+        count = max(0, min(int(limit) if limit is not None else 100, 1000))
+        frame = self._picker_sample(frame, count)
         result = []
         for _, row in frame.iterrows():
+            order_id = str(row["order_id"])
+            outcome = self.arm5_by_id.loc[order_id]
+            has_plan = int(outcome["requested_bitmask"]) != 0
+            package_available = has_plan and bool(outcome["dispute_opened"]) and int(outcome["materialised_bitmask"]) != 0
             result.append(
                 {
-                    "order_id": str(row["order_id"]),
+                    "order_id": order_id,
                     "merchant_id": str(row["merchant_id"]),
                     "category": str(row["category"]),
                     "order_value": float(row["order_value"]),
                     "eligible_tier": str(row["eligible_tier"]),
                     "decision_date": int(row["decision_date"]),
+                    "has_plan": has_plan,
+                    "package_available": package_available,
                 }
             )
-        return {"orders": result, "total": int(len(frame)), "source": self.branch}
+        return {
+            "orders": result,
+            "total": int(total),
+            "source": self.branch,
+            "plans_only": bool(plans_only),
+            "package_ready_only": bool(package_ready_only),
+        }
+
+    def _picker_sample(self, frame: pd.DataFrame, count: int) -> pd.DataFrame:
+        """Return a useful, deterministic sample for the order picker.
+
+        The test slice is value-sorted, so taking its first page hides nearly all
+        stored plans: the cheapest orders quite reasonably have an empty plan.
+        Keep a value-spread sample while reserving half the page for orders whose
+        stored Arm 5 outcome requests evidence.
+        """
+        if count == 0 or frame.empty:
+            return frame.iloc[:0]
+
+        ordered = frame.sort_values(["category", "order_value", "order_id"], kind="mergesort").reset_index(drop=True)
+        stored_masks = self.arm5_by_id["requested_bitmask"]
+        opened = ordered["order_id"].map(self.arm5_by_id["dispute_opened"]).fillna(False).astype(bool)
+        materialised = ordered["order_id"].map(self.arm5_by_id["materialised_bitmask"]).fillna(0).astype("int64").ne(0)
+        has_plan = ordered["order_id"].map(stored_masks).fillna(0).astype("int64").ne(0)
+        ordered = ordered.assign(
+            _has_plan=has_plan,
+            _package_ready=has_plan & opened & materialised,
+        )
+        if len(ordered) <= count:
+            picked = ordered
+        else:
+            package_ready = ordered.loc[ordered["_package_ready"]]
+            package_count = min(len(package_ready), count)
+            package_positions = np.linspace(0, len(package_ready) - 1, num=package_count, dtype=int) if package_count else []
+            picked_package = package_ready.iloc[np.unique(package_positions)] if package_count else package_ready.iloc[:0]
+
+            remaining = ordered.drop(index=picked_package.index)
+            with_plan = remaining.loc[remaining["_has_plan"]]
+            plan_count = min(len(with_plan), max(0, count // 2 - len(picked_package)))
+            plan_positions = np.linspace(0, len(with_plan) - 1, num=plan_count, dtype=int)
+            picked_plan = with_plan.iloc[np.unique(plan_positions)]
+
+            remaining = remaining.drop(index=picked_plan.index)
+            remaining_count = count - len(picked_package) - len(picked_plan)
+            value_positions = np.linspace(0, len(remaining) - 1, num=remaining_count, dtype=int)
+            picked_value = remaining.iloc[np.unique(value_positions)] if remaining_count else remaining.iloc[:0]
+            picked = pd.concat([picked_package, picked_plan, picked_value])
+
+        return picked.sort_values(
+            ["_package_ready", "_has_plan", "category", "order_value", "order_id"],
+            ascending=[False, False, True, True, True],
+            kind="mergesort",
+        ).drop(columns=["_has_plan", "_package_ready"])
 
     def _stored_mask(self, order_id: str, arm: str = "arm5") -> int:
         """Read a stored plan mask from a phase outcome artefact."""
@@ -170,6 +244,8 @@ class Phase5Service:
         """Return the stored plan plus model diagnostics for one test order."""
         row = self._row(order_id)
         stored_mask = self._stored_mask(order_id, "arm5")
+        outcome = self.arm5_by_id.loc[order_id]
+        package_available = stored_mask != 0 and bool(outcome["dispute_opened"]) and int(outcome["materialised_bitmask"]) != 0
         models = self.ensure_models()
         result = best_plan(row, models, models.support_mask, self.params)
         model_mask = int(result.requested_bitmask)
@@ -228,6 +304,9 @@ class Phase5Service:
                 "ev": float(result.ev),
                 "model_requested_bitmask": model_mask,
             },
+            "package_available": package_available,
+            "dispute_opened": bool(outcome["dispute_opened"]),
+            "materialised_bitmask": int(outcome["materialised_bitmask"]),
             "evidence": evidence_items,
             "stages": {
                 "exposure_probability": exposure,
