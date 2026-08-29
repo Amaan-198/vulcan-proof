@@ -219,7 +219,7 @@ features:
 
 # ---------------------------------------------------------------------------
 models:
-  support_min:        {value: 10, unit: count, source: SPEC, sweep: null, rank: null}
+  support_min:        {value: 5, unit: count, source: SPEC, sweep: null, rank: null}
   lgbm:
     stage_a: {value: {objective: binary, num_leaves: 63, learning_rate: 0.05, n_estimators: 600, min_child_samples: 200, feature_fraction: 0.8, bagging_fraction: 0.8, bagging_freq: 1, scale_pos_weight: 1.0, deterministic: true, force_row_wise: true, verbose: -1}, unit: dict, source: SPEC, sweep: null, rank: null}
     stage_b: {value: {objective: multiclass, num_class: 3, num_leaves: 31, learning_rate: 0.05, n_estimators: 300, min_child_samples: 30, deterministic: true, force_row_wise: true, verbose: -1}, unit: dict, source: SPEC, sweep: null, rank: null}
