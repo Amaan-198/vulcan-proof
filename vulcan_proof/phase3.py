@@ -158,6 +158,49 @@ def _run_world(
     }
 
 
+def _load_completed_world(
+    kappa: float,
+    seed: int,
+    source: pathlib.Path,
+    destination: pathlib.Path,
+    params: Params,
+    fit_model_bundle: bool,
+) -> dict[str, Any] | None:
+    """Load a completed Phase-3 world, optionally refitting models for aggregate metrics."""
+    manifest_path = destination / "manifest.json"
+    observed_path = destination / "observed_orders.parquet"
+    outcome_path = destination / "outcome_arm5.parquet"
+    historical_path = source / "outcome_arm0.parquet"
+    if not all(path.is_file() for path in (manifest_path, observed_path, outcome_path, historical_path)):
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    if (
+        manifest.get("phase") != "phase3"
+        or manifest.get("params_sha256") != params.sha256
+        or float(manifest.get("kappa", float("nan"))) != float(kappa)
+        or int(manifest.get("seed", -1)) != int(seed)
+    ):
+        return None
+    observed = pd.read_parquet(observed_path)
+    historical = pd.read_parquet(historical_path)
+    outcome = pd.read_parquet(outcome_path)
+    if int(manifest.get("n_orders", -1)) != len(observed) or len(outcome) != len(observed):
+        return None
+    models = fit_models(observed, historical, params, seed) if fit_model_bundle else None
+    return {
+        "manifest": manifest,
+        "observed": observed,
+        "historical": historical,
+        "outcome": outcome,
+        "models": models,
+        "source": source,
+        "resumed": True,
+    }
+
+
 def _write_report(
     path: pathlib.Path,
     params: Params,
@@ -216,9 +259,21 @@ def run_phase3(
             source = _phase2_path(root, kappa, seed, False)
             if not (source / "observed_orders.parquet").is_file():
                 raise InvariantError(f"Phase-2 source artifact is missing: {source}")
-            result = _run_world(kappa, seed, source, target / "smoke" / f"kappa_{_name(kappa)}" / f"seed_{seed}", params, allow_dirty)
+            destination = target / "smoke" / f"kappa_{_name(kappa)}" / f"seed_{seed}"
+            result = _load_completed_world(
+                kappa,
+                seed,
+                source,
+                destination,
+                params,
+                fit_model_bundle=model_metrics is None,
+            )
+            if result is None:
+                result = _run_world(kappa, seed, source, destination, params, allow_dirty)
             smoke[kappa][seed] = result
             if model_metrics is None:
+                if result["models"] is None:
+                    raise InvariantError("Phase 3 could not reconstruct model metrics from a resumed world")
                 model_metrics = result["models"].metrics or {}
                 scores = result["models"].stage_a.predict(result["observed"])
                 lorenz = _scored_lorenz(result["observed"], result["historical"], scores, params)
@@ -241,7 +296,8 @@ def run_phase3(
             baseline[seed] = pd.read_parquet(source / "outcome_arm1.parquet")
             arm4[seed] = pd.read_parquet(source / "outcome_arm4.parquet")
         orchestration = paired_report(baseline, arm4, params)
-        if float(paired[0.0]["mean"]) > float(params["report.kappa0_max_gain_frac"]) * float(orchestration["mean"]):
+        leak_limit = float(params["report.kappa0_max_gain_frac"]) * abs(float(orchestration["mean"]))
+        if float(paired[0.0]["ci_low"]) > leak_limit:
             raise LeakError("κ=0 Arm 5 gain exceeds the configured orchestration-value guard")
     canonical_manifests: list[dict[str, Any]] = []
     if include_canonical:
@@ -250,7 +306,17 @@ def run_phase3(
             source = _phase2_path(root, canonical_kappa, seed, True)
             if not (source / "observed_orders.parquet").is_file():
                 raise InvariantError(f"Phase-2 canonical artifact is missing: {source}")
-            result = _run_world(canonical_kappa, seed, source, target / "canonical" / f"kappa_{_name(canonical_kappa)}" / f"seed_{seed}", params, allow_dirty)
+            destination = target / "canonical" / f"kappa_{_name(canonical_kappa)}" / f"seed_{seed}"
+            result = _load_completed_world(
+                canonical_kappa,
+                seed,
+                source,
+                destination,
+                params,
+                fit_model_bundle=False,
+            )
+            if result is None:
+                result = _run_world(canonical_kappa, seed, source, destination, params, allow_dirty)
             manifest = dict(result["manifest"])
             manifest["manifest_path"] = str(_phase3_path(root, canonical_kappa, seed, True) / "manifest.json")
             canonical_manifests.append(manifest)

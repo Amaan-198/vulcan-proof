@@ -124,12 +124,21 @@ def _write_report(path: pathlib.Path, params: Params, kappa_data: dict[str, Any]
         grouped[parameter][str(row["level"])] = row["arm5_minus_arm4"]["mean"]
     for parameter, row in grouped.items():
         lines.append(f"| {int(row['rank'])} | {parameter} | {float(row['lo']):.3f} | {float(row['hi']):.3f} |")
+    if oat_data.get("disabled"):
+        lines.extend(["", f"Disabled by configuration: {oat_data['reason']}."])
+    lines.extend(["", "## LHS", ""])
+    if lhs_data.get("disabled"):
+        lines.extend([
+            f"Disabled by configuration: {lhs_data['reason']}.",
+            "Fraction with CI_low > 0: not applicable (disabled).",
+            "Fraction with CI_high < 0: not applicable (disabled).",
+        ])
+    else:
+        lines.extend([
+            f"Fraction with CI_low > 0: {float(lhs_data['fractions']['ci_low_positive']):.3f}.",
+            f"Fraction with CI_high < 0: {float(lhs_data['fractions']['ci_high_negative']):.3f}.",
+        ])
     lines.extend([
-        "",
-        "## LHS",
-        "",
-        f"Fraction with CI_low > 0: {float(lhs_data['fractions']['ci_low_positive']):.3f}.",
-        f"Fraction with CI_high < 0: {float(lhs_data['fractions']['ci_high_negative']):.3f}.",
         "",
         "## Robustness",
         "",

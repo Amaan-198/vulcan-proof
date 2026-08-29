@@ -14,7 +14,14 @@ from ..errors import InvariantError
 from ..manifest import load_manifest
 from ..params import P, Params, load
 from ..report.paired import paired_report
-from .common import json_value, point_id, require_min_seeds, write_json, write_params_snapshot
+from .common import (
+    apply_overrides,
+    json_value,
+    point_id,
+    require_min_seeds,
+    write_json,
+    write_params_snapshot,
+)
 from .runner import run_seed_worker
 from ..sim.calibrate import calibrate_funnel
 

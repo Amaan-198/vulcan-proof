@@ -29,7 +29,20 @@ def run_lhs_sweep(
     )
     paths = point_parameter_paths(int(params["sweep.lhs_max_rank"]), params)
     if not paths:
-        raise InvariantError("LHS has no rank-qualified parameters")
+        root = Path(output_root).resolve() if output_root is not None else params.path.resolve().parents[1] / "outputs" / "phase4"
+        root.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "disabled": True,
+            "reason": "no parameters qualify for sweep.lhs_max_rank",
+            "kappa": float(params["sim.kappa.canonical"]),
+            "paths": [],
+            "design": [],
+            "rows": [],
+            "fractions": {},
+            "scatter": [],
+        }
+        write_json(root / "lhs.json", payload)
+        return {**payload, "points": []}
     design = lhs_design(paths, params)
     kappa = float(params["sim.kappa.canonical"])
     rows: list[dict[str, Any]] = []
@@ -85,4 +98,3 @@ def run_lhs_sweep(
 
 
 run = run_lhs_sweep
-

@@ -37,6 +37,7 @@ class StageBModel:
         self.encoder: FeatureEncoder | None = None
         self.model: object | None = None
         self.calibrators: list[object] = []
+        self.calibration_scales = np.ones(len(DISPUTE_TYPES), dtype="float64")
         self.metrics: dict[str, Any] = {}
         self.validation_rates = np.zeros(len(DISPUTE_TYPES), dtype="float64")
 
@@ -99,6 +100,11 @@ class StageBModel:
             calibrator(raw[:, position], (y_valid == position).astype("int8"), self.validation_rates[position])
             for position in range(len(DISPUTE_TYPES))
         ]
+        base_calibrated = self._calibrator_outputs(raw)
+        self.calibration_scales = self._fit_calibration_scales(
+            base_calibrated,
+            self.validation_rates,
+        )
         calibrated = self._calibrated(raw)
         self._assert_rows(calibrated)
         for position in range(len(DISPUTE_TYPES)):
@@ -117,18 +123,58 @@ class StageBModel:
             raise InvariantError("Stage B returned an invalid probability matrix")
         return result
 
-    def _calibrated(self, values: np.ndarray) -> np.ndarray:
+    def _calibrator_outputs(self, values: np.ndarray) -> np.ndarray:
+        """Return independently calibrated one-vs-rest probabilities."""
         if len(self.calibrators) != len(DISPUTE_TYPES):
             raise InvariantError("Stage B calibrators are missing")
-        result = np.column_stack([
+        return np.column_stack([
             np.clip(calibrator_item.predict(values[:, position]), 0.0, 1.0)
             for position, calibrator_item in enumerate(self.calibrators)
         ])
+
+    @staticmethod
+    def _normalise_rows(values: np.ndarray) -> np.ndarray:
+        """Normalise multiclass rows, using a uniform fallback for zero rows."""
+        result = np.asarray(values, dtype="float64").copy()
         totals = result.sum(axis=1)
         bad = totals <= 0.0
         result[~bad] /= totals[~bad, None]
         if bool(bad.any()):
             result[bad] = 1.0 / len(DISPUTE_TYPES)
+        return result
+
+    @classmethod
+    def _fit_calibration_scales(
+        cls,
+        values: np.ndarray,
+        target_rates: np.ndarray,
+    ) -> np.ndarray:
+        """Fit class multipliers so row-normalised probabilities retain validation margins."""
+        if len(values) == 0:
+            return np.ones(len(DISPUTE_TYPES), dtype="float64")
+        targets = np.asarray(target_rates, dtype="float64")
+        total = float(targets.sum())
+        if total <= 0.0:
+            return np.ones(len(DISPUTE_TYPES), dtype="float64")
+        targets = targets / total
+        scales = np.ones(len(DISPUTE_TYPES), dtype="float64")
+        for _ in range(1000):
+            adjusted = cls._normalise_rows(np.asarray(values, dtype="float64") * scales)
+            current = adjusted.mean(axis=0)
+            if float(np.max(np.abs(current - targets))) < 1e-12:
+                return scales
+            if bool(((current <= 0.0) & (targets > 0.0)).any()):
+                raise InvariantError("Stage B calibration has no probability mass for an observed class")
+            scales *= np.divide(targets, current, out=np.zeros_like(targets), where=current > 0.0)
+            maximum = float(scales.max())
+            if maximum > 0.0:
+                scales /= maximum
+        raise InvariantError("Stage B multiclass calibration margins did not converge")
+
+    def _calibrated(self, values: np.ndarray) -> np.ndarray:
+        result = self._normalise_rows(
+            self._calibrator_outputs(values) * self.calibration_scales
+        )
         self._assert_rows(result)
         return result
 

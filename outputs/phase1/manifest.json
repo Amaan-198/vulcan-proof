@@ -1,109 +1,109 @@
 {
   "artifacts": [
     {
-      "n_rows": 3000000,
+      "n_rows": 250000,
       "name": "observed_orders",
-      "sha256": "7e420af062749eca8b4bac64cf519802835f37812312d087a95c4ff1dd3adcfb"
+      "sha256": "4b765117558d1a2de9d8afed663ac871b76013dcd52f8578f06d08020d0b697e"
     },
     {
-      "n_rows": 3000000,
+      "n_rows": 250000,
       "name": "hidden_orders",
-      "sha256": "3be4ccba2262b8c5e20048536cd2002fdcf2f40831e5991cc69cde7fbc63b74e"
+      "sha256": "99dd43fe3e109d856526b087365c47ba918cc70e0261ed5aa130c15e629e2b5a"
     }
   ],
-  "cap_count": 32,
-  "cap_fraction": 1.0666666666666667e-05,
+  "cap_count": 4,
+  "cap_fraction": 1.6e-05,
   "category_expected_rates": {
-    "Apparel": 0.0034771131049594717,
-    "Electronics": 0.0039770179528090446,
-    "FMCG": 0.0005039494872684237,
-    "Home": 0.00300932600917347,
-    "Jewellery": 0.00537266330305208
+    "Apparel": 0.0035235007814961626,
+    "Electronics": 0.0040243440301965154,
+    "FMCG": 0.0004950617078400323,
+    "Home": 0.0030231635234427086,
+    "Jewellery": 0.005487152562077547
   },
   "category_realised_rates": {
-    "Apparel": 0.003578456199197961,
-    "Electronics": 0.004068830482944366,
-    "FMCG": 0.0004843870925247957,
-    "Home": 0.003083021849724326,
-    "Jewellery": 0.005424123145179835
+    "Apparel": 0.0035672997522708506,
+    "Electronics": 0.004043126684636119,
+    "FMCG": 0.0006797194913708782,
+    "Home": 0.003139800968548773,
+    "Jewellery": 0.00463339294423671
   },
   "censor_fractions": {
-    "gap": 0.0016372573685969531,
-    "test": 7.231902164832507e-05,
-    "train": 8.575679658344922e-06,
-    "validate": 0.00010978153474585575
+    "gap": 0.0016957037170425727,
+    "test": 5.971931919976112e-05,
+    "train": 8.590474881451447e-06,
+    "validate": 2.9883752203926725e-05
   },
-  "dirty_allowed": false,
+  "dirty_allowed": true,
   "evidence_requests": {
     "AckFirst": {
-      "ack": 267956,
-      "geotag": 5895,
-      "otp": 6000,
-      "packing": 6006,
-      "sealed": 5991,
-      "serial": 5910,
-      "signature": 5993,
-      "vack": 89083,
-      "weight": 5904
+      "ack": 22178,
+      "geotag": 479,
+      "otp": 492,
+      "packing": 517,
+      "sealed": 511,
+      "serial": 513,
+      "signature": 484,
+      "vack": 7453,
+      "weight": 499
     },
     "Diligent": {
-      "ack": 6706,
-      "geotag": 5612,
-      "otp": 40177,
-      "packing": 223782,
-      "sealed": 5707,
-      "serial": 223766,
-      "signature": 5756,
-      "vack": 6668,
-      "weight": 223758
+      "ack": 581,
+      "geotag": 492,
+      "otp": 3366,
+      "packing": 18580,
+      "sealed": 481,
+      "serial": 18593,
+      "signature": 462,
+      "vack": 593,
+      "weight": 18583
     },
     "Erratic": {
-      "ack": 100138,
-      "geotag": 90975,
-      "otp": 91248,
-      "packing": 91152,
-      "sealed": 91255,
-      "serial": 91293,
-      "signature": 91094,
-      "vack": 100210,
-      "weight": 91029
+      "ack": 8357,
+      "geotag": 7556,
+      "otp": 7609,
+      "packing": 7587,
+      "sealed": 7623,
+      "serial": 7624,
+      "signature": 7588,
+      "vack": 8312,
+      "weight": 7565
     },
     "HandoffHeavy": {
-      "ack": 6683,
-      "geotag": 247096,
-      "otp": 65117,
-      "packing": 6425,
-      "sealed": 6321,
-      "serial": 6526,
-      "signature": 23978,
-      "vack": 6729,
-      "weight": 6485
+      "ack": 567,
+      "geotag": 20648,
+      "otp": 5435,
+      "packing": 531,
+      "sealed": 519,
+      "serial": 530,
+      "signature": 2014,
+      "vack": 561,
+      "weight": 498
     },
     "Minimal": {
-      "ack": 13072,
-      "geotag": 11963,
-      "otp": 12109,
-      "packing": 12068,
-      "sealed": 12074,
-      "serial": 12081,
-      "signature": 11925,
-      "vack": 13106,
-      "weight": 11993
+      "ack": 1069,
+      "geotag": 1012,
+      "otp": 978,
+      "packing": 973,
+      "sealed": 994,
+      "serial": 985,
+      "signature": 1008,
+      "vack": 1060,
+      "weight": 979
     },
     "PhotoPref": {
-      "ack": 7619,
-      "geotag": 6282,
-      "otp": 6321,
-      "packing": 245894,
-      "sealed": 245876,
-      "serial": 6346,
-      "signature": 6158,
-      "vack": 7553,
-      "weight": 6361
+      "ack": 644,
+      "geotag": 544,
+      "otp": 504,
+      "packing": 20396,
+      "sealed": 20396,
+      "serial": 507,
+      "signature": 508,
+      "vack": 628,
+      "weight": 526
     }
   },
-  "git_clean_at_start": true,
-  "git_commit": "517810bb1e718e4b773d284fd6528c5f259e693b",
+  "git_clean_at_start": false,
+  "git_commit": "b9efec1023f28d71ee3917753d16af36f4c63190",
   "hostname": "LAPTOP-OJK02O15",
   "installed_versions": {
     "PyYAML": "6.0.3",
@@ -178,18 +178,18 @@
     "webencodings": "0.6.1"
   },
   "kappa": 0.6,
-  "lgbm_threads": 4,
-  "lgbm_threads_in_worker": 1,
+  "lgbm_threads": 24,
+  "lgbm_threads_in_worker": 8,
   "master_seed": 20260826,
-  "n_orders": 3000000,
-  "otp_signature_corequest": 81569,
-  "params_sha256": "d7ca037d9c04dcda57c8b1e3fa24394a5206176ba9276d788792872bf4ab2157",
-  "peak_rss_mb": 1457.78125,
+  "n_orders": 250000,
+  "otp_signature_corequest": 6801,
+  "params_sha256": "8e047e3fb78197e5afb44d122216a395b559812789a355a9f5365da6dcf8d761",
+  "peak_rss_mb": 243.54296875,
   "phase": "phase1",
   "python_version": "3.13.12 (tags/v3.13.12:1cbe481, Feb  3 2026, 18:22:25) [MSC v.1944 64 bit (AMD64)]",
   "seed": 20260826,
   "shift_enabled": false,
   "theta_path": "D:\\Projects\\RazorPay\\outputs\\theta.json",
-  "timestamp": "2026-08-27T12:25:29.354589+00:00",
-  "wall_seconds": 31.49313340000117
+  "timestamp": "2026-08-29T13:28:00.605751+00:00",
+  "wall_seconds": 2.261752999998862
 }

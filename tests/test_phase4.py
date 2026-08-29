@@ -19,6 +19,8 @@ from vulcan_proof.sweep.common import (
     require_min_seeds,
 )
 from vulcan_proof.sweep.kappa import kappa_star, kappa_zero_guard
+from vulcan_proof.sweep.lhs import run_lhs_sweep
+from vulcan_proof.sweep.oat import run_oat_sweep
 
 
 def test_kappa_star_monotone_logic() -> None:
@@ -58,13 +60,17 @@ def test_kappa_zero_guard_fires() -> None:
     with pytest.raises(LeakError):
         kappa_zero_guard(1.0, 1.0, P)
     kappa_zero_guard(0.0, 1.0, P)
+    kappa_zero_guard(1.0, 1.0, P, gain_ci_low=-1.0)
+    with pytest.raises(LeakError):
+        kappa_zero_guard(1.0, 1.0, P, gain_ci_low=0.5)
 
 
 def test_min_seeds_enforced() -> None:
-    """Paired sweep summaries cannot be reported with fewer than five seeds."""
+    """Paired sweep summaries enforce the configured seed minimum."""
+    minimum = int(P["report.min_seeds"])
     with pytest.raises(InvariantError):
-        require_min_seeds((1, 2, 3, 4), P)
-    require_min_seeds((1, 2, 3, 4, 5), P)
+        require_min_seeds(range(1, minimum), P)
+    require_min_seeds(range(1, minimum + 1), P)
 
 
 def test_lhs_reproducible() -> None:
@@ -73,6 +79,18 @@ def test_lhs_reproducible() -> None:
     left = lhs_design(paths, P, points=5)
     right = lhs_design(paths, P, points=5)
     assert np.array_equal(left, right)
+
+
+def test_rank_zero_disables_oat_and_lhs(tmp_path: Path) -> None:
+    """A zero max rank writes explicit empty artifacts without running points."""
+    params = apply_overrides(P, {"sweep.oat_max_rank": 0, "sweep.lhs_max_rank": 0})
+    seeds = range(1, int(params["report.min_seeds"]) + 1)
+    oat = run_oat_sweep(params, tmp_path, seeds=seeds)
+    lhs = run_lhs_sweep(params, tmp_path, seeds=seeds)
+    assert oat["disabled"] is True and oat["rows"] == [] and oat["points"] == []
+    assert lhs["disabled"] is True and lhs["rows"] == [] and lhs["points"] == []
+    assert json.loads((tmp_path / "oat.json").read_text(encoding="utf-8"))["disabled"] is True
+    assert json.loads((tmp_path / "lhs.json").read_text(encoding="utf-8"))["disabled"] is True
 
 
 def test_point_theta_isolated(tmp_path: Path) -> None:
@@ -92,4 +110,3 @@ def test_footer_on_every_chart() -> None:
         figure = function({}, P)
         assert figure_footer(figure) == str(P["report.simulator_footer"])
         plt.close(figure)
-

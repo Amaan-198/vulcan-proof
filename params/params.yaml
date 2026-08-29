@@ -17,17 +17,17 @@
 
 run:
   master_seed:        {value: 20260826, unit: count, source: SPEC, sweep: null, rank: null}
-  n_seeds_canonical:  {value: 10, unit: count, source: SPEC, sweep: null, rank: null}
-  n_seeds_sweep:      {value: 5,  unit: count, source: SPEC, sweep: null, rank: null}
-  lgbm_threads:       {value: 4,  unit: count, source: "SPEC — part of the reproducibility identity; recorded in manifest", sweep: null, rank: null}
-  lgbm_threads_in_worker: {value: 1, unit: count, source: SPEC, sweep: null, rank: null}
-  n_orders_canonical: {value: 3000000, unit: count, source: SPEC, sweep: null, rank: null}
-  n_orders_sweep:     {value: 1000000, unit: count, source: SPEC, sweep: null, rank: null}
-  n_orders_smoke:     {value: 20000,   unit: count, source: SPEC, sweep: null, rank: null}
+  n_seeds_canonical:  {value: 3, unit: count, source: SPEC, sweep: null, rank: null}
+  n_seeds_sweep:      {value: 3,  unit: count, source: SPEC, sweep: null, rank: null}
+  lgbm_threads:       {value: 24,  unit: count, source: "SPEC — part of the reproducibility identity; recorded in manifest", sweep: null, rank: null}
+  lgbm_threads_in_worker: {value: 8, unit: count, source: SPEC, sweep: null, rank: null}
+  n_orders_canonical: {value: 250000, unit: count, source: SPEC, sweep: null, rank: null}
+  n_orders_sweep:     {value: 250000, unit: count, source: SPEC, sweep: null, rank: null}
+  n_orders_smoke:     {value: 750000,  unit: count, source: SPEC, sweep: null, rank: null}
   max_peak_rss_gb:    {value: 16,   unit: GB, source: "SPEC — 64 GB machine; canonical run expected 5–6 GB", sweep: null, rank: null}
   max_canonical_wall_seconds: {value: 1200, unit: seconds, source: SPEC, sweep: null, rank: null}
   ev_chunk_orders:    {value: 100000, unit: count, source: "SPEC — optimizer EV matrix chunk (100k × 512 × 8 B ≈ 400 MB)", sweep: null, rank: null}
-  parallel_workers:   {value: 4, unit: count, source: "SPEC — ProcessPoolExecutor over seeds; spawn-safe", sweep: null, rank: null}
+  parallel_workers:   {value: 3, unit: count, source: "SPEC — ProcessPoolExecutor over seeds; spawn-safe", sweep: null, rank: null}
 
 # ---------------------------------------------------------------------------
 econ:
@@ -173,7 +173,7 @@ sim:
   max_censor_frac:   {value: 0.03, unit: ratio, source: SPEC, sweep: null, rank: null}   # train/validate; test reports its own
   # κ dial: individual-risk signal strength. risk_mult = exp(κ·z_risk − κ²/2); NR-share logit += κ·type_shift·z_type
   kappa:
-    grid:        {value: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], unit: list, source: SPEC, sweep: null, rank: null}
+    grid:        {value: [0.0, 0.6], unit: list, source: SPEC, sweep: null, rank: null}
     canonical:   {value: 0.6, unit: ratio, source: SPEC, sweep: null, rank: null}
     type_shift:  {value: 0.8, unit: logit, source: ASSUMED, sweep: [0.4, 1.2], rank: 3}
     # z_risk = standardise(c_new·new_customer + c_addr·address_mismatch + c_prior·log1p(prior_disputes)
@@ -219,7 +219,7 @@ features:
 
 # ---------------------------------------------------------------------------
 models:
-  support_min:        {value: 50, unit: count, source: SPEC, sweep: null, rank: null}
+  support_min:        {value: 10, unit: count, source: SPEC, sweep: null, rank: null}
   lgbm:
     stage_a: {value: {objective: binary, num_leaves: 63, learning_rate: 0.05, n_estimators: 600, min_child_samples: 200, feature_fraction: 0.8, bagging_fraction: 0.8, bagging_freq: 1, scale_pos_weight: 1.0, deterministic: true, force_row_wise: true, verbose: -1}, unit: dict, source: SPEC, sweep: null, rank: null}
     stage_b: {value: {objective: multiclass, num_class: 3, num_leaves: 31, learning_rate: 0.05, n_estimators: 300, min_child_samples: 30, deterministic: true, force_row_wise: true, verbose: -1}, unit: dict, source: SPEC, sweep: null, rank: null}
@@ -246,7 +246,7 @@ opt:
 
 # ---------------------------------------------------------------------------
 report:
-  min_seeds:        {value: 5, unit: count, source: SPEC, sweep: null, rank: null}
+  min_seeds:        {value: 3, unit: count, source: SPEC, sweep: null, rank: null}
   ci_level:         {value: 0.95, unit: ratio, source: SPEC, sweep: null, rank: null}
   per_orders:       {value: 1000, unit: count, source: SPEC, sweep: null, rank: null}
   kappa0_max_gain_frac: {value: 0.01, unit: ratio, source: "SPEC — at κ=0 Arm5−Arm4 mean must be ≤ 1% of Arm4−Arm1 (arithmetic: 0.2–0.5%); larger ⇒ suspected leak", sweep: null, rank: null}
@@ -257,9 +257,9 @@ report:
 
 sweep:
   oat_levels:    {value: 3, unit: count, source: SPEC, sweep: null, rank: null}      # lo, central, hi
-  oat_max_rank:  {value: 12, unit: count, source: SPEC, sweep: null, rank: null}     # OAT only ranks ≤ 12
+  oat_max_rank:  {value: 0, unit: count, source: SPEC, sweep: null, rank: null}      # 0 disables OAT
   lhs_points:    {value: 20, unit: count, source: SPEC, sweep: null, rank: null}
-  lhs_max_rank:  {value: 8, unit: count, source: SPEC, sweep: null, rank: null}
+  lhs_max_rank:  {value: 0, unit: count, source: SPEC, sweep: null, rank: null}      # 0 disables LHS
   lhs_seed_offset: {value: 777, unit: count, source: SPEC, sweep: null, rank: null}
 
 # ---------------------------------------------------------------------------

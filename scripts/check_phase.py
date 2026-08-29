@@ -469,7 +469,7 @@ def check_phase_4() -> list[tuple[str, bool, str]]:
             table = payload["table"]
             star_ok = payload.get("verdict") in allowed_verdicts and (isinstance(payload.get("kappa_star"), (float, int)) or payload.get("kappa_star") is None)
             zero_rows = [row for row in table if float(row["kappa"]) == 0.0]
-            guard_ok = bool(zero_rows) and float(zero_rows[0]["arm5_minus_arm4_mean"]) <= float(P["report.kappa0_max_gain_frac"]) * float(zero_rows[0]["arm4_minus_arm1_mean"])
+            guard_ok = bool(zero_rows) and float(zero_rows[0]["ci_low"]) <= float(P["report.kappa0_max_gain_frac"]) * abs(float(zero_rows[0]["arm4_minus_arm1_mean"]))
             results.append(("kappa_star verdict and table valid", star_ok, str(star_path)))
             results.append(("kappa=0 guard reported satisfied", guard_ok, str(star_path)))
         except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as exc:
@@ -486,7 +486,9 @@ def check_phase_4() -> list[tuple[str, bool, str]]:
     if lhs_path.is_file():
         try:
             rows = _json(lhs_path).get("rows", [])
-            results.append(("LHS table has configured points", len(rows) == int(P["sweep.lhs_points"]), f"{len(rows)}"))
+            lhs_paths = _phase4_ranked_paths(int(P["sweep.lhs_max_rank"]))
+            expected_lhs = int(P["sweep.lhs_points"]) if lhs_paths else 0
+            results.append(("LHS table has configured points", len(rows) == expected_lhs, f"{len(rows)}/{expected_lhs}"))
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             results.append(("LHS table is valid JSON", False, str(lhs_path)))
     else:

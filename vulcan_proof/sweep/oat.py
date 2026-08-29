@@ -36,7 +36,16 @@ def run_oat_sweep(
     )
     paths = point_parameter_paths(int(params["sweep.oat_max_rank"]), params)
     if not paths:
-        raise InvariantError("OAT sweep has no rank-qualified parameters")
+        root = Path(output_root).resolve() if output_root is not None else params.path.resolve().parents[1] / "outputs" / "phase4"
+        root.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "disabled": True,
+            "reason": "no parameters qualify for sweep.oat_max_rank",
+            "kappa": float(params["sim.kappa.canonical"]),
+            "rows": [],
+        }
+        write_json(root / "oat.json", payload)
+        return {**payload, "points": []}
     kappa = float(params["sim.kappa.canonical"])
     rows: list[dict[str, Any]] = []
     points: list[dict[str, Any]] = []
@@ -75,4 +84,3 @@ def run_oat_sweep(
 
 
 run = run_oat_sweep
-

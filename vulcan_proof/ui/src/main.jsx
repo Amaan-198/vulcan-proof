@@ -158,6 +158,14 @@ function App() {
           <span className="brand-flame">V</span>
           <span className="brand-word">Vulcan</span>
         </div>
+        <button
+          className={`demo-rail-cta ${screen === "demo" ? "active" : ""}`}
+          onClick={() => setScreen("demo")}
+          type="button"
+        >
+          <span className="demo-rail-kicker">INTERACTIVE</span>
+          <span className="demo-rail-title">▶ Live demo</span>
+        </button>
         <div className="rail-label">WORKSPACE</div>
         <nav className="rail-nav" aria-label="Demo sections">
           {navItems.map((item) => (
@@ -181,7 +189,7 @@ function App() {
         </div>
       </aside>
 
-      <main className="main-shell">
+      <main className={`main-shell ${screen === "demo" ? "demo-active" : ""}`}>
         <header className="topbar">
           <div className="crumbs"><span>Risk operations</span><span className="crumb-slash">/</span><strong>Proof desk</strong></div>
           <div className="topbar-right">
@@ -191,6 +199,7 @@ function App() {
         </header>
 
         <div className="content-wrap">
+          {screen === "demo" ? <LiveDemo /> : <>
           {error && <div className="error-banner" role="alert"><span>!</span>{error}<button onClick={() => setError("")} type="button">Dismiss</button></div>}
           {loading ? <LoadingState /> : (
             <>
@@ -220,6 +229,7 @@ function App() {
               {screen === "report" && <ReportScreen report={report} />}
             </>
           )}
+          </>}
         </div>
         <footer className="app-footer">
           <span className="footer-rule" />
@@ -227,6 +237,199 @@ function App() {
           <span className="footer-right">Vulcan Proof · Phase 5</span>
         </footer>
       </main>
+    </div>
+  );
+}
+
+function LiveDemo() {
+  const [phase, setPhase] = useState("intro");
+  const [visibleCards, setVisibleCards] = useState(1);
+  const [visibleArrows, setVisibleArrows] = useState(0);
+  const [advancing, setAdvancing] = useState(false);
+
+  useEffect(() => {
+    if (!advancing) return undefined;
+    const nextCard = window.setTimeout(() => {
+      setVisibleCards((count) => count + 1);
+      setAdvancing(false);
+    }, 560);
+    return () => window.clearTimeout(nextCard);
+  }, [advancing]);
+
+  function startSimulation() {
+    setVisibleCards(1);
+    setVisibleArrows(0);
+    setAdvancing(false);
+    setPhase("cards");
+  }
+
+  function advanceCards() {
+    if (advancing) return;
+    if (visibleCards === 4) {
+      setPhase("reveal");
+      return;
+    }
+    setVisibleArrows(visibleCards);
+    setAdvancing(true);
+  }
+
+  function restartSimulation() {
+    setVisibleCards(1);
+    setVisibleArrows(0);
+    setAdvancing(false);
+    setPhase("intro");
+  }
+
+  return (
+    <section className={`live-demo live-demo-${phase}`} aria-label="Vulcan Proof live simulation">
+      {phase === "intro" && (
+        <div className="demo-intro">
+          <div className="demo-live-pill"><span />LIVE SIMULATION · VULCAN PROOF</div>
+          <h1>Watch live how Vulcan Proof can make the difference between winning or losing a ₹43,907 dispute</h1>
+          <p>A customer buys an electronics order. Razorpay Vulcan correctly approves the payment. 62 days later, the customer files a chargeback — “I never received it.”</p>
+          <button className="demo-primary-button" onClick={startSimulation} type="button">Start simulation →</button>
+          <div className="demo-metadata">Order #0074677 · Electronics · merchant_005802</div>
+        </div>
+      )}
+
+      {phase === "cards" && (
+        <div className="demo-cards-phase">
+          <div className="demo-step-hint" aria-live="polite">{visibleCards === 4 ? "All stages shown" : `Step ${visibleCards} of 4 — click Next to continue`}</div>
+          <div className="demo-cards-row">
+            <DemoOrderCard visible />
+            <DemoArrow visible={visibleArrows >= 1} />
+            <DemoPaymentCard visible={visibleCards >= 2} />
+            <DemoArrow visible={visibleArrows >= 2} />
+            <DemoRiskCard visible={visibleCards >= 3} />
+            <DemoArrow visible={visibleArrows >= 3} />
+            <DemoPlanCard visible={visibleCards >= 4} />
+          </div>
+          <button className="demo-primary-button demo-next-button" disabled={advancing} onClick={advanceCards} type="button">
+            {visibleCards === 4 ? "Fast-forward 62 days →" : advancing ? "Revealing…" : "Next →"}
+          </button>
+        </div>
+      )}
+
+      {phase === "reveal" && (
+        <div className="demo-reveal">
+          <div className="demo-time-jump">62 DAYS LATER</div>
+          <h1>And the customer raised a bank dispute fraud...</h1>
+          <div className="chargeback-box">
+            <strong>CHARGEBACK FILED · VISA 13.1 · NON-RECEIPT</strong>
+            <em>“I never received this item. I am requesting a full refund.”</em>
+          </div>
+          <button className="demo-dark-button" onClick={() => setPhase("result")} type="button">Show result →</button>
+        </div>
+      )}
+
+      {phase === "result" && <DemoResult onRestart={restartSimulation} />}
+    </section>
+  );
+}
+
+function DemoCard({ accent, label, title, visible, children, badge, badgeTone = "blue" }) {
+  return (
+    <article className={`demo-card demo-card-${accent} ${visible ? "is-visible" : ""}`} aria-hidden={!visible}>
+      <div className="demo-card-accent" />
+      <div className="demo-card-body">
+        <div className="demo-card-label">{label}</div>
+        <h2>{title}</h2>
+        <div className="demo-card-content">{children}</div>
+        <div className={`demo-card-badge demo-badge-${badgeTone}`}>{badge}</div>
+      </div>
+    </article>
+  );
+}
+
+function DemoArrow({ visible }) {
+  return <div className={`demo-arrow ${visible ? "is-visible" : ""}`} aria-hidden="true"><span /></div>;
+}
+
+function DemoOrderCard({ visible }) {
+  return (
+    <DemoCard accent="blue" label="01 / ORDER" title="Customer order" visible={visible} badge="Order confirmed">
+      <div className="demo-field-list">
+        <DemoField label="Customer" value="Raj Kumar" />
+        <DemoField label="Order" value="#0074677" />
+        <DemoField label="Product" value="Samsung Galaxy S25" />
+        <DemoField label="Category" value="Electronics" />
+        <DemoField label="Amount" value="₹43,907.15" prominent />
+        <DemoField label="Payment" value="Full prepaid" />
+        <DemoField label="Date" value="26 Aug 2026" />
+      </div>
+    </DemoCard>
+  );
+}
+
+function DemoField({ label, value, prominent = false }) {
+  return <div className={`demo-field ${prominent ? "prominent" : ""}`}><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function DemoPaymentCard({ visible }) {
+  return (
+    <DemoCard accent="green" label="02 / PAYMENT" title="Razorpay Vulcan" visible={visible} badge="✓ Payment approved" badgeTone="green">
+      <div className="demo-risk-score"><span className="demo-score-check">✓</span><strong>0.04</strong><small>LOW RISK</small></div>
+      <div className="demo-note-box">No fraud signals detected. Payment processed normally.</div>
+    </DemoCard>
+  );
+}
+
+function DemoRiskCard({ visible }) {
+  const risks = [
+    ["Non-Receipt", 48, "red"],
+    ["Not-As-Described", 29, "orange"],
+    ["Empty Box", 23, "yellow"],
+  ];
+  return (
+    <DemoCard accent="orange" label="03 / RISK" title="Vulcan Proof" visible={visible} badge="⚠ Dispute risk detected" badgeTone="orange">
+      <div className="demo-exposure"><strong>31%</strong><span>exposure</span></div>
+      <div className="demo-exposure-note">ELEVATED · Evidence window open</div>
+      <div className="demo-risk-bars">
+        {risks.map(([name, value, tone]) => <div className="demo-risk-row" key={name}><div><span>{name}</span><strong>{value}%</strong></div><i><b className={`risk-fill-${tone}`} style={{ width: `${value}%` }} /></i></div>)}
+      </div>
+    </DemoCard>
+  );
+}
+
+function DemoPlanCard({ visible }) {
+  const evidence = [
+    ["Weight", "₹4.22", true],
+    ["Serial no.", "₹3.38", true],
+    ["Packing video", "₹2.13", true],
+    ["Geotag", "—", false],
+    ["OTP", "—", false],
+  ];
+  return (
+    <DemoCard accent="blue" label="04 / PLAN" title="Evidence plan" visible={visible} badge="Plan EV: ₹0.47">
+      <div className="demo-plan-note">Capture before dispatch:</div>
+      <div className="demo-plan-list">
+        {evidence.map(([name, value, selected]) => <div className={`demo-plan-row ${selected ? "selected" : ""}`} key={name}><span className="demo-plan-check">{selected ? "✓" : ""}</span><span>{name}</span><strong>{value}</strong></div>)}
+      </div>
+    </DemoCard>
+  );
+}
+
+function DemoResult({ onRestart }) {
+  const story = [
+    ["Told the merchant to record the package weight before shipping.", "Merchant did. When the dispute claimed tampering — there was nothing to stand on."],
+    ["Told the merchant to photograph the serial number.", "Merchant did. The exact device was linked to this order in seconds."],
+    ["Told the merchant to record the packing on video.", "Merchant did. The “empty box” claim collapsed the moment it was submitted."],
+  ];
+  return (
+    <div className="demo-result">
+      <section className="demo-outcome-zone">
+        <div><div className="demo-result-label">DISPUTE OUTCOME · ORDER #0074677</div><h1>Merchant won the dispute.</h1><p>Vulcan Proof’s recommendations matched every requirement of the dispute.</p></div>
+        <div className="demo-protected"><strong>PROTECTED</strong><b>₹43,907</b><span>recovered</span></div>
+      </section>
+      <section className="demo-story-zone">
+        <div className="demo-result-label">What Vulcan Proof did</div>
+        {story.map(([title, copy]) => <div className="demo-story-row" key={title}><span>✓</span><div><strong>{title}</strong><p>{copy}</p></div></div>)}
+      </section>
+      <section className="demo-contrast-zone">
+        <strong>Without Vulcan Proof</strong>
+        <p>No one told the merchant what to collect. So nothing was collected. When the dispute arrived 62 days later, all they had was a “DELIVERED” status. That’s not enough. ₹43,907 — gone.</p>
+      </section>
+      <button className="demo-restart-button" onClick={onRestart} type="button">← Restart simulation</button>
     </div>
   );
 }

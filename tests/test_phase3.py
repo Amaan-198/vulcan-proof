@@ -12,11 +12,30 @@ from vulcan_proof import ev_reference as reference
 from vulcan_proof.errors import SchemaError
 from vulcan_proof.models import ModelBundle, fit_models
 from vulcan_proof.models.labels import eligible
+from vulcan_proof.models.stage_b import StageBModel
 from vulcan_proof.opt.optimizer import best_plan, ev_set
 from vulcan_proof.params import P
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_stage_b_multiclass_scaling_preserves_validation_margins() -> None:
+    """Row normalisation must not undo Stage B's one-vs-rest calibration margins."""
+    values = np.asarray(
+        [
+            [0.80, 0.15, 0.05],
+            [0.55, 0.35, 0.10],
+            [0.20, 0.65, 0.15],
+            [0.10, 0.55, 0.35],
+        ],
+        dtype="float64",
+    )
+    targets = np.asarray([0.25, 0.50, 0.25], dtype="float64")
+    scales = StageBModel._fit_calibration_scales(values, targets)
+    adjusted = StageBModel._normalise_rows(values * scales)
+    assert np.allclose(adjusted.sum(axis=1), 1.0)
+    assert np.allclose(adjusted.mean(axis=0), targets, atol=1e-10)
 
 
 @pytest.fixture(scope="module")

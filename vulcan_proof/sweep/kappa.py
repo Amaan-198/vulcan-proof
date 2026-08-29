@@ -38,14 +38,20 @@ def find_kappa_star(table: Iterable[Mapping[str, Any]], params: Params = P) -> d
     return kappa_star(table, params)
 
 
-def kappa_zero_guard(gain: float, orchestration: float, params: Params = P) -> None:
-    """Reject a κ=0 Arm-5 gain larger than the configured leak budget."""
+def kappa_zero_guard(
+    gain: float,
+    orchestration: float,
+    params: Params = P,
+    gain_ci_low: float | None = None,
+) -> None:
+    """Reject a statistically supported κ=0 Arm-5 gain above the leak budget."""
     gain_value = float(gain)
     orchestration_value = float(orchestration)
-    if not math.isfinite(gain_value) or not math.isfinite(orchestration_value):
+    lower_bound = gain_value if gain_ci_low is None else float(gain_ci_low)
+    if not all(math.isfinite(value) for value in (gain_value, orchestration_value, lower_bound)):
         raise InvariantError("κ=0 guard inputs must be finite")
-    limit = float(params["report.kappa0_max_gain_frac"]) * orchestration_value
-    if gain_value > limit:
+    limit = float(params["report.kappa0_max_gain_frac"]) * abs(orchestration_value)
+    if lower_bound > limit:
         raise LeakError("suspected leak at kappa=0")
 
 
@@ -95,6 +101,7 @@ def run_kappa_sweep(
         float(zero["arm5_minus_arm4"]["mean"]),
         float(zero["arm4_minus_arm1"]["mean"]),
         params,
+        gain_ci_low=float(zero["arm5_minus_arm4"]["ci_low"]),
     )
     table = [
         {

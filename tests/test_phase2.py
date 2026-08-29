@@ -114,8 +114,13 @@ def test_history_maturity() -> None:
 def test_paired_min_seeds(world: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]) -> None:
     observed, hidden, _ = world
     outcome = resolve(arm1(observed, P), hidden, observed, seed=1, params=P, arm_id="arm1")
+    minimum = int(P["report.min_seeds"])
     with pytest.raises(InvariantError):
-        paired_report({seed: outcome for seed in range(1, 5)}, {seed: outcome for seed in range(1, 5)}, P)
+        paired_report(
+            {seed: outcome for seed in range(1, minimum)},
+            {seed: outcome for seed in range(1, minimum)},
+            P,
+        )
 
 
 def test_arm4_tuning_uses_validation_only(world: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]) -> None:
