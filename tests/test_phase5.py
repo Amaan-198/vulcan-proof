@@ -37,8 +37,8 @@ def test_demo_script_contains_eight_beats(phase5_service) -> None:
 
 
 def test_api_plan_matches_arm5_artifact(phase5_service) -> None:
-    observed_path = next((ROOT / "outputs" / "phase3" / "canonical").glob("kappa_*/seed_*/observed_orders.parquet"))
-    outcome_path = observed_path.parent / "outcome_arm5.parquet"
+    observed_path = phase5_service.phase3_observed_path
+    outcome_path = phase5_service.phase3_outcome_path
     import pandas as pd
 
     observed = pd.read_parquet(observed_path, columns=["order_id", "split"])
@@ -86,7 +86,10 @@ def test_order_picker_prioritizes_package_ready_examples(phase5_service) -> None
 def test_plan_reports_when_package_is_unavailable(phase5_service) -> None:
     """A selected plan can exist without an opened dispute package."""
     outcome = phase5_service.arm5_outcome
+    test_ids = set(phase5_service._test_rows()["order_id"].astype(str))
     plan_only = outcome.loc[
+        outcome["order_id"].astype(str).isin(test_ids)
+        &
         outcome["requested_bitmask"].ne(0)
         & (~outcome["dispute_opened"].astype(bool) | outcome["materialised_bitmask"].eq(0))
     ].iloc[0]

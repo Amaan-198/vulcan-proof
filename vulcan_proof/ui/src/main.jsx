@@ -3,7 +3,15 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 const EVIDENCE_ORDER = ["weight", "serial", "sealed", "packing", "geotag", "otp", "signature", "ack", "vack"];
-const DEMO_ORDER_LIMIT = 5;
+const DEMO_ORDER_LIMIT = 36;
+const FEATURED_DEMO = {
+  orderId: "#0097370",
+  amount: "₹45,539.34",
+  amountRounded: "₹45,539",
+  merchantId: "merchant_003138",
+  payment: "UPI",
+  decisionDay: "871",
+};
 
 const navItems = [
   { id: "order", label: "Order", short: "01" },
@@ -43,6 +51,10 @@ function pct(value, digits = 1) {
 
 function pretty(value) {
   return String(value || "—").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function displayOrderId(value) {
+  return String(value || "—").replace(/^order_\d+_/, "#");
 }
 
 function App() {
@@ -285,10 +297,10 @@ function LiveDemo() {
       {phase === "intro" && (
         <div className="demo-intro">
           <div className="demo-live-pill"><span />LIVE SIMULATION · VULCAN PROOF</div>
-          <h1>Watch live how Vulcan Proof can make the difference between winning or losing a ₹43,907 dispute</h1>
+          <h1>Watch live how Vulcan Proof can make the difference in a ₹45,539 dispute</h1>
           <p>A customer buys an electronics order. Razorpay Vulcan correctly approves the payment. 62 days later, the customer files a chargeback — “I never received it.”</p>
           <button className="demo-primary-button" onClick={startSimulation} type="button">Start simulation →</button>
-          <div className="demo-metadata">Order #0074677 · Electronics · merchant_005802</div>
+          <div className="demo-metadata">Order {FEATURED_DEMO.orderId} · Electronics · {FEATURED_DEMO.merchantId}</div>
         </div>
       )}
 
@@ -350,12 +362,12 @@ function DemoOrderCard({ visible }) {
     <DemoCard accent="blue" label="01 / ORDER" title="Customer order" visible={visible} badge="Order confirmed">
       <div className="demo-field-list">
         <DemoField label="Customer" value="Raj Kumar" />
-        <DemoField label="Order" value="#0074677" />
-        <DemoField label="Product" value="Samsung Galaxy S25" />
+        <DemoField label="Order" value={FEATURED_DEMO.orderId} />
+        <DemoField label="Product" value="Consumer electronics" />
         <DemoField label="Category" value="Electronics" />
-        <DemoField label="Amount" value="₹43,907.15" prominent />
-        <DemoField label="Payment" value="Full prepaid" />
-        <DemoField label="Date" value="26 Aug 2026" />
+        <DemoField label="Amount" value={FEATURED_DEMO.amount} prominent />
+        <DemoField label="Payment" value={FEATURED_DEMO.payment} />
+        <DemoField label="Date" value={`Day ${FEATURED_DEMO.decisionDay}`} />
       </div>
     </DemoCard>
   );
@@ -393,14 +405,14 @@ function DemoRiskCard({ visible }) {
 
 function DemoPlanCard({ visible }) {
   const evidence = [
-    ["Weight", "₹4.22", true],
-    ["Serial no.", "₹3.38", true],
-    ["Packing video", "₹2.13", true],
+    ["Sealed packaging", "selected", true],
+    ["Verified acknowledgement", "selected", true],
+    ["Weight", "—", false],
+    ["Serial no.", "—", false],
     ["Geotag", "—", false],
-    ["OTP", "—", false],
   ];
   return (
-    <DemoCard accent="blue" label="04 / PLAN" title="Evidence plan" visible={visible} badge="Plan EV: ₹0.47">
+    <DemoCard accent="blue" label="04 / PLAN" title="Evidence plan" visible={visible} badge="Plan EV: ₹0.70">
       <div className="demo-plan-note">Capture before dispatch:</div>
       <div className="demo-plan-list">
         {evidence.map(([name, value, selected]) => <div className={`demo-plan-row ${selected ? "selected" : ""}`} key={name}><span className="demo-plan-check">{selected ? "✓" : ""}</span><span>{name}</span><strong>{value}</strong></div>)}
@@ -411,15 +423,14 @@ function DemoPlanCard({ visible }) {
 
 function DemoResult({ onRestart }) {
   const story = [
-    ["Told the merchant to record the package weight before shipping.", "Merchant did. When the dispute claimed tampering — there was nothing to stand on."],
-    ["Told the merchant to photograph the serial number.", "Merchant did. The exact device was linked to this order in seconds."],
-    ["Told the merchant to record the packing on video.", "Merchant did. The “empty box” claim collapsed the moment it was submitted."],
+    ["Selected sealed packaging evidence before dispatch.", "The stored dispute package contains the captured sealed artifact."],
+    ["Selected verified acknowledgement for the order.", "The request remains part of the stored plan, bound to this order."],
   ];
   return (
     <div className="demo-result">
       <section className="demo-outcome-zone">
-        <div><div className="demo-result-label">DISPUTE OUTCOME · ORDER #0074677</div><h1>Merchant won the dispute.</h1><p>Vulcan Proof’s recommendations matched every requirement of the dispute.</p></div>
-        <div className="demo-protected"><strong>PROTECTED</strong><b>₹43,907</b><span>recovered</span></div>
+        <div><div className="demo-result-label">DISPUTE OUTCOME · ORDER {FEATURED_DEMO.orderId}</div><h1>Merchant lost the dispute.</h1><p>The stored simulation records a lost non-receipt dispute; the selected plan and captured package remain available for review.</p></div>
+        <div className="demo-protected"><strong>PACKAGE READY</strong><b>{FEATURED_DEMO.amountRounded}</b><span>for review</span></div>
       </section>
       <section className="demo-story-zone">
         <div className="demo-result-label">What Vulcan Proof did</div>
@@ -427,7 +438,7 @@ function DemoResult({ onRestart }) {
       </section>
       <section className="demo-contrast-zone">
         <strong>Without Vulcan Proof</strong>
-        <p>No one told the merchant what to collect. So nothing was collected. When the dispute arrived 62 days later, all they had was a “DELIVERED” status. That’s not enough. ₹43,907 — gone.</p>
+        <p>No one told the merchant what to collect. When the dispute arrived 62 days later, all they had was a “DELIVERED” status. The stored package preserves the evidence that was captured for this ₹45,539 order.</p>
       </section>
       <button className="demo-restart-button" onClick={onRestart} type="button">← Restart simulation</button>
     </div>
@@ -459,7 +470,7 @@ function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPla
         eyebrow="01 / ORDER"
         title="Decision desk"
         copy="Pick a test order to inspect the evidence plan that was selected for its context."
-        action={<div className="intro-context"><span className="context-label">WORLD</span><span className="context-value">κ = 0.6 · Seed 1</span></div>}
+        action={<div className="intro-context"><span className="context-label">WORLD</span><span className="context-value">κ = 0.6 · Seed 2</span></div>}
       />
       <div className="order-layout">
         <section className="panel order-browser">
@@ -481,7 +492,7 @@ function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPla
               <tbody>
                 {orders.map((order) => (
                   <tr className={selectedId === order.order_id ? "selected" : ""} onClick={() => setSelectedId(order.order_id)} key={order.order_id}>
-                    <td><div className="order-cell"><span className="row-radio">{selectedId === order.order_id ? "✓" : ""}</span><span>{order.order_id.replace("order_1_", "#")}</span></div><small>{order.merchant_id} · {order.has_plan ? <><span className="order-status plan-status">evidence plan</span><span className={`order-status ${order.package_available ? "ready-status" : "plan-only-status"}`}>{order.package_available ? "package ready" : "plan only"}</span></> : <span className="order-status empty-status">no evidence selected</span>}</small></td>
+                    <td><div className="order-cell"><span className="row-radio">{selectedId === order.order_id ? "✓" : ""}</span><span>{displayOrderId(order.order_id)}</span></div><small>{order.merchant_id} · {order.has_plan ? <><span className="order-status plan-status">evidence plan</span><span className={`order-status ${order.package_available ? "ready-status" : "plan-only-status"}`}>{order.package_available ? "package ready" : "plan only"}</span></> : <span className="order-status empty-status">no evidence selected</span>}</small></td>
                     <td><span className={`category-tag ${categoryColors[order.category] || "slate"}`}>{order.category}</span></td>
                     <td className="money-cell">{money(order.order_value)}</td>
                     <td><span className="tier-label">{pretty(order.eligible_tier)}</span></td>
@@ -497,7 +508,7 @@ function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPla
           <div className="selected-card panel">
             <div className="selected-card-top"><span className="selected-label">SELECTED ORDER</span><span className="live-mark"><span />stored</span></div>
             {selectedOrder ? <>
-              <div className="order-id-large">{selectedOrder.order_id.replace("order_1_", "#")}</div>
+              <div className="order-id-large">{displayOrderId(selectedOrder.order_id)}</div>
               <div className="order-meta-line"><span>{selectedOrder.merchant_id}</span><span>·</span><span>Day {selectedOrder.decision_date}</span></div>
               <div className="value-block"><span>Order value</span><strong>{money(selectedOrder.order_value)}</strong></div>
               <div className="summary-grid">
@@ -538,7 +549,7 @@ function PlanScreen({ plan, loading, openPackage, goBack }) {
         action={<button className="secondary-button" onClick={goBack} type="button">← Change order</button>}
       />
       <div className="plan-order-strip panel">
-        <div className="plan-order-main"><span className="selected-label">ORDER</span><strong>{plan.order.order_id.replace("order_1_", "#")}</strong><span className={`category-tag ${categoryColors[plan.order.category] || "slate"}`}>{plan.order.category}</span></div>
+        <div className="plan-order-main"><span className="selected-label">ORDER</span><strong>{displayOrderId(plan.order.order_id)}</strong><span className={`category-tag ${categoryColors[plan.order.category] || "slate"}`}>{plan.order.category}</span></div>
         <div className="plan-order-value"><span>Value</span><strong>{money(plan.order.order_value)}</strong></div>
         <div className="plan-order-risk"><span>Exposure</span><strong>{pct(exposure, 2)}</strong><em className={exposure >= 0.02 ? "risk-high" : "risk-normal"}>{riskLabel}</em></div>
       </div>
@@ -602,12 +613,12 @@ function PackageScreen({ pkg, loading, goBack }) {
   return (
     <>
       <PageIntro eyebrow="03 / PACKAGE" title="Dispute package" copy="A compact handoff view for the materialised evidence bound to this order." action={<button className="secondary-button" onClick={goBack} type="button">← Back to plan</button>} />
-      <div className="package-header panel"><div><span className="selected-label">STORED OUTCOME</span><div className="package-order-id">{pkg.order_id.replace("order_1_", "#")}</div><div className="order-meta-line">{pkg.category} <span>·</span> {pkg.dispute_type} dispute <span>·</span> Arm 5</div></div><div className="package-value"><span>Order value</span><strong>{money(pkg.order_value)}</strong></div></div>
+      <div className="package-header panel"><div><span className="selected-label">STORED OUTCOME</span><div className="package-order-id">{displayOrderId(pkg.order_id)}</div><div className="order-meta-line">{pkg.category} <span>·</span> {pkg.dispute_type} dispute <span>·</span> Arm 5</div></div><div className="package-value"><span>Order value</span><strong>{money(pkg.order_value)}</strong></div></div>
       <div className="package-layout">
         <section className="panel package-items"><div className="panel-heading"><div><div className="card-kicker">CAPTURED ARTIFACTS</div><h2>API-ready evidence</h2></div><span className="captured-count"><span />{pkg.items?.length || 0} captured</span></div>
           {pkg.items?.length ? <div className="package-list">{pkg.items.map((item) => <div className="package-item" key={item.evidence}><span className="package-check">✓</span><div className="package-item-main"><strong>{item.label}</strong><span>{pretty(item.window)} · requested and captured</span></div><div className="package-item-slot"><span>Mapped to</span><strong>{item.api_slot}</strong></div></div>)}</div> : <div className="package-empty">No evidence materialised in the stored outcome.</div>}
         </section>
-        <section className="panel provenance-card"><div className="card-kicker">PROVENANCE</div><h2>Bound to this order</h2><div className="provenance-line"><span className="timeline-dot" /><div><strong>{pkg.provenance.bound_to_order.replace("order_1_", "#")}</strong><span>Order binding</span></div></div><div className="provenance-line"><span className="timeline-dot" /><div><strong>Day {pkg.provenance.decision_day}</strong><span>Decision point</span></div></div><div className="provenance-line"><span className="timeline-dot last" /><div><strong>Phase 3 outcome</strong><span>Stored simulator artifact</span></div></div><div className="provenance-foot">The package preserves timing and order binding for review.</div></section>
+        <section className="panel provenance-card"><div className="card-kicker">PROVENANCE</div><h2>Bound to this order</h2><div className="provenance-line"><span className="timeline-dot" /><div><strong>{displayOrderId(pkg.provenance.bound_to_order)}</strong><span>Order binding</span></div></div><div className="provenance-line"><span className="timeline-dot" /><div><strong>Day {pkg.provenance.decision_day}</strong><span>Decision point</span></div></div><div className="provenance-line"><span className="timeline-dot last" /><div><strong>Phase 3 outcome</strong><span>Stored simulator artifact</span></div></div><div className="provenance-foot">The package preserves timing and order binding for review.</div></section>
       </div>
       <div className="package-footer-line"><span className="success-check">✓</span> Ready for a dispute review handoff <span className="footer-divider" /> <span>{pkg.dispute_type} · API slots mapped</span></div>
     </>

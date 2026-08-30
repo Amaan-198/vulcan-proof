@@ -13,12 +13,13 @@ import pandas as pd
 
 from ..errors import InvariantError
 from ..models import fit_models
-from ..opt.optimizer import available_mask, best_plan, bit_for, evidence_names
+from ..opt.optimizer import available_mask, best_plan, bit_for, ev_set, evidence_names, plan_frame
 from ..params import P, Params
 from ..schemas import check
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+DEMO_SEED = 2
 
 
 def _world_name(value: float) -> str:
@@ -62,13 +63,19 @@ class Phase5Service:
         self._load_world()
 
     def _load_world(self) -> None:
-        """Select the canonical world, falling back to smoke only when needed."""
+        """Select the canonical demo world, falling back only when it is absent."""
         kappa = float(self.params["sim.kappa.canonical"])
         branches = ("canonical", "smoke")
         candidates: list[pathlib.Path] = []
         for branch in branches:
             base = self.root / "outputs" / "phase3" / branch / f"kappa_{_world_name(kappa)}"
-            candidates.extend(sorted(base.glob("seed_*/observed_orders.parquet")))
+            preferred = base / f"seed_{DEMO_SEED}" / "observed_orders.parquet"
+            if preferred.is_file():
+                candidates.append(preferred)
+        if not candidates:
+            for branch in branches:
+                base = self.root / "outputs" / "phase3" / branch / f"kappa_{_world_name(kappa)}"
+                candidates.extend(sorted(base.glob("seed_*/observed_orders.parquet")))
         if not candidates:
             raise FileNotFoundError("Phase-3 observed artefact is missing")
         observed_path = candidates[0]
@@ -248,7 +255,8 @@ class Phase5Service:
         package_available = stored_mask != 0 and bool(outcome["dispute_opened"]) and int(outcome["materialised_bitmask"]) != 0
         models = self.ensure_models()
         result = best_plan(row, models, models.support_mask, self.params)
-        model_mask = int(result.requested_bitmask)
+        model_row = self.observed.loc[[row.name]]
+        model_mask = int(plan_frame(model_row, models, models.support_mask, self.params)[0])
         selected_mask = stored_mask
         type_probabilities = models.pB(row)
         exposure = float(models.pA(row))
@@ -301,7 +309,7 @@ class Phase5Service:
             "plan": {
                 "requested_bitmask": selected_mask,
                 "evidence": [item["name"] for item in evidence_items if item["selected"]],
-                "ev": float(result.ev),
+                "ev": float(ev_set(row, selected_mask, models, self.params)),
                 "model_requested_bitmask": model_mask,
             },
             "package_available": package_available,
