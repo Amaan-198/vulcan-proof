@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -307,9 +307,13 @@ function App() {
 
 function LiveDemo() {
   const [phase, setPhase] = useState("intro");
+  const [outgoingPhase, setOutgoingPhase] = useState("");
+  const [phaseTransitionKey, setPhaseTransitionKey] = useState(0);
   const [visibleCards, setVisibleCards] = useState(1);
   const [visibleArrows, setVisibleArrows] = useState(0);
   const [advancing, setAdvancing] = useState(false);
+  const [incomingReady, setIncomingReady] = useState(true);
+  const phaseExitTimer = useRef(null);
 
   useEffect(() => {
     if (!advancing) return undefined;
@@ -320,17 +324,34 @@ function LiveDemo() {
     return () => window.clearTimeout(nextCard);
   }, [advancing]);
 
+  useEffect(() => () => {
+    if (phaseExitTimer.current) window.clearTimeout(phaseExitTimer.current);
+  }, []);
+
+  function transitionTo(nextPhase) {
+    if (nextPhase === phase) return;
+    if (phaseExitTimer.current) window.clearTimeout(phaseExitTimer.current);
+    setOutgoingPhase(phase);
+    setIncomingReady(false);
+    setPhase(nextPhase);
+    setPhaseTransitionKey((key) => key + 1);
+    phaseExitTimer.current = window.setTimeout(() => {
+      setOutgoingPhase("");
+      setIncomingReady(true);
+    }, 560);
+  }
+
   function startSimulation() {
     setVisibleCards(1);
     setVisibleArrows(0);
     setAdvancing(false);
-    setPhase("cards");
+    transitionTo("cards");
   }
 
   function advanceCards() {
     if (advancing) return;
     if (visibleCards === 4) {
-      setPhase("reveal");
+      transitionTo("reveal");
       return;
     }
     setVisibleArrows(visibleCards);
@@ -341,12 +362,13 @@ function LiveDemo() {
     setVisibleCards(1);
     setVisibleArrows(0);
     setAdvancing(false);
-    setPhase("intro");
+    transitionTo("intro");
   }
 
-  return (
-    <section className={`live-demo live-demo-${phase}`} aria-label="Vulcan Proof live simulation">
-      {phase === "intro" && (
+  function renderPhase(currentPhase) {
+    return (
+      <>
+      {currentPhase === "intro" && (
         <div className="demo-intro">
           <div className="demo-live-pill"><span />LIVE SIMULATION · VULCAN PROOF</div>
           <h1>Watch live how Vulcan Proof can make the difference in a {FEATURED_DEMO.amountRounded} dispute</h1>
@@ -356,7 +378,7 @@ function LiveDemo() {
         </div>
       )}
 
-      {phase === "cards" && (
+      {currentPhase === "cards" && (
         <div className="demo-cards-phase">
           <div className="demo-step-hint" aria-live="polite">{visibleCards === 4 ? "All stages shown" : `Step ${visibleCards} of 4 — click Next to continue`}</div>
           <div className="demo-cards-row">
@@ -374,7 +396,7 @@ function LiveDemo() {
         </div>
       )}
 
-      {phase === "reveal" && (
+      {currentPhase === "reveal" && (
         <div className="demo-reveal">
           <div className="demo-time-jump">62 DAYS LATER</div>
           <h1>And the customer filed a {FEATURED_DEMO.disputeType} dispute.</h1>
@@ -382,11 +404,21 @@ function LiveDemo() {
             <strong>DISPUTE FILED · VISA 13.1 · {FEATURED_DEMO.disputeType.toUpperCase()}</strong>
             <em>“I never received this item. I am requesting a full refund.”</em>
           </div>
-          <button className="demo-dark-button" onClick={() => setPhase("result")} type="button">Show result →</button>
+          <button className="demo-dark-button" onClick={() => transitionTo("result")} type="button">Show result →</button>
         </div>
       )}
 
-      {phase === "result" && <DemoResult onRestart={restartSimulation} />}
+      {currentPhase === "result" && <DemoResult onRestart={restartSimulation} />}
+      </>
+    );
+  }
+
+  return (
+    <section className={`live-demo live-demo-${phase}`} aria-label="Vulcan Proof live simulation">
+      <div className="demo-stage-stack">
+        {outgoingPhase && <div className={`demo-stage demo-stage-${outgoingPhase} demo-stage-exiting`} aria-hidden="true">{renderPhase(outgoingPhase)}</div>}
+        <div className={`demo-stage demo-stage-entering ${incomingReady ? "" : "demo-stage-waiting"}`} key={phaseTransitionKey}>{renderPhase(phase)}</div>
+      </div>
     </section>
   );
 }
@@ -469,22 +501,25 @@ function DemoPlanCard({ visible }) {
 
 function DemoResult({ onRestart }) {
   const story = [
-    [`Selected ${FEATURED_DEMO.evidence[0]} evidence before dispatch.`, `The captured ${FEATURED_DEMO.evidence[0].toLowerCase()} held up in the contested ${FEATURED_DEMO.disputeType} dispute.`],
-    [`Selected ${FEATURED_DEMO.evidence[1]} for the order.`, `The captured ${FEATURED_DEMO.evidence[1].toLowerCase()} supported the successful contest.`],
+    "Evaluated the order before dispatch — not after a dispute was filed.",
+    "Weighed the cost of each evidence type against its likely payoff.",
+    `Selected ${FEATURED_DEMO.evidence[0]} evidence before dispatch.`,
+    `Selected ${FEATURED_DEMO.evidence[1]} for the order.`,
+    "The dispute needed exactly this evidence — and Vulcan Proof had it ready.",
   ];
   return (
     <div className="demo-result">
       <section className="demo-outcome-zone">
-        <div><div className="demo-result-label">DISPUTE OUTCOME · ORDER {FEATURED_DEMO.orderId}</div><h1>Merchant won the dispute.</h1><p>The stored simulation records a contested {FEATURED_DEMO.disputeType} dispute that the merchant won; both selected evidence artifacts were captured and remain available for review.</p></div>
+        <div><div className="demo-result-label">DISPUTE OUTCOME · ORDER {FEATURED_DEMO.orderId}</div><h1>Merchant won the dispute.</h1></div>
         <div className="demo-protected"><strong>PACKAGE READY</strong><b>{FEATURED_DEMO.amountRounded}</b><span>for review</span></div>
       </section>
       <section className="demo-story-zone">
         <div className="demo-result-label">What Vulcan Proof did</div>
-        {story.map(([title, copy]) => <div className="demo-story-row" key={title}><span>✓</span><div><strong>{title}</strong><p>{copy}</p></div></div>)}
+        {story.map((item) => <div className="demo-story-row" key={item}><span>✓</span><strong>{item}</strong></div>)}
       </section>
       <section className="demo-contrast-zone">
         <strong>Without Vulcan Proof</strong>
-        <p>No one told the merchant what to collect. When the dispute arrived 62 days later, all they had was a “DELIVERED” status. The stored package preserves the evidence that was captured for this {FEATURED_DEMO.amountRounded} order.</p>
+        <p>No evidence, no case. Just a 'DELIVERED' status — and a {FEATURED_DEMO.amountRounded} order left undefended.</p>
       </section>
       <button className="demo-restart-button" onClick={onRestart} type="button">← Restart simulation</button>
     </div>
