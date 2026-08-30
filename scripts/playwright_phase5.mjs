@@ -56,6 +56,9 @@ async function footerAtBottom(name) {
 await page.goto(baseURL, { waitUntil: "networkidle" });
 await page.screenshot({ path: "outputs/phase5/playwright-order.png", fullPage: true });
 check("order screen renders", await page.getByRole("heading", { name: "Decision desk" }).isVisible());
+check("report option is absent", await page.getByRole("button", { name: "Report", exact: true }).count() === 0);
+const reportRequested = await page.evaluate(() => performance.getEntriesByType("resource").some((entry) => entry.name.includes("/report/")));
+check("report API is not requested", !reportRequested);
 await layout("order screen");
 await footerAtBottom("order screen");
 
@@ -75,14 +78,6 @@ await layout("package screen");
 check("package screen renders", true);
 check("package has provenance", await page.getByRole("heading", { name: "Bound to this order" }).isVisible());
 await footerAtBottom("package screen");
-
-await page.getByRole("button", { name: /Report/ }).click();
-await page.getByRole("heading", { name: "Validation report" }).waitFor({ state: "visible" });
-await page.screenshot({ path: "outputs/phase5/playwright-report.png", fullPage: true });
-await layout("report screen");
-check("deferred status is visible", await page.getByRole("heading", { name: /Production-scale robustness validation is deferred/ }).isVisible());
-check("report scope is explicit", (await page.locator(".validation-side").textContent())?.includes("Buildathon smoke"));
-await footerAtBottom("report screen");
 
 await page.getByRole("button", { name: /Order/ }).click();
 await page.getByRole("heading", { name: "Decision desk" }).waitFor({ state: "visible" });

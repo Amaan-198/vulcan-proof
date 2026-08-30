@@ -22,7 +22,7 @@ The Phase 4 production sweep is officially deferred. Missing `outputs/phase4/kap
 `outputs/phase4_REPORT.md`, and production charts are therefore valid inputs to Phase 5. Their
 absence must not cause the API, UI, demo generator, or Phase 5 checker to fail.
 
-`GET /report/kappa` must return an explicit non-numeric status payload in this mode, for example:
+The generated demo script must carry an explicit non-numeric status payload in this mode, for example:
 
 ```json
 {
@@ -33,8 +33,8 @@ absence must not cause the API, UI, demo generator, or Phase 5 checker to fail.
 }
 ```
 
-This status is not a measured κ result. The UI and demo must say that production-scale robustness
-validation is deferred. They must not convert the missing result into `κ* = null`, a zero, or a
+This status is not a measured κ result. The demo script must say that production-scale robustness
+validation is deferred. It must not convert the missing result into `κ* = null`, a zero, or a
 production claim. Smoke values may be shown only when labelled as smoke/simulator validation.
 
 ### Extended-validation mode (optional later)
@@ -50,8 +50,6 @@ measured `κ* = null` from a completed sweep remains distinct from the buildatho
   codes, Stage A/B/C outputs, and the tier. Also returns Arm 4's plan for the same order.
 - `GET /order/{order_id}/dispute-package` — for a test-split order with `dispute_opened`, the
   materialised evidence mapped to `evidence.*.api_slot`.
-- `GET /report/kappa` — the validated Phase 4 κ report when available, otherwise the explicit
-  buildathon deferred-status payload; missing production files must not produce an unhandled error.
 - `GET /report/arm4-policy` — the tuned rule table.
 - `GET /demo/script` — `demo_script.json`.
 - Optional `POST /explain` calls an external LLM to render one sentence from the plan JSON. It is
@@ -80,18 +78,20 @@ Single React page (Vite; `ui/package.json` pins exact versions and `package-lock
 Node 22 LTS on Windows; build with `npm ci && npm run build` from PowerShell). The Python
 `scripts/run_phase5.py` serves the built `dist/` via FastAPI static files; no separate dev server in the demo.
 Screens: Order → Plan (with per-type EV bars and refusal reasons, Arm 4 plan side-by-side) →
-Dispute package → Report (κ chart and verdict when available, otherwise deferred-validation
-status). Footer string on every ₹ view.
+Dispute package. There is no Report or validation screen in the UI; Phase 4 status remains part of
+the generated demo script and underlying artefacts. Footer string on every ₹ view.
 
 ## Tests (`tests/test_phase5.py`)
+- `test_report_panel_route_is_removed` — the retired validation-panel endpoint is not registered.
 - `test_api_plan_matches_arm5_artifact` — `/order/{id}/plan` bitmask equals the stored Arm 5 plan for that order (no recomputation drift).
 - `test_demo_script_numbers_match_artifacts` — every number in `demo_script.json` is present in
   Phase 3/4 metrics or plan artefacts (string match to 2 dp); deferred-status text contains no
   fabricated production number.
 - `test_demo_script_never_list` — NEVER-list grep on `demo_script.json`.
 - `test_fallbacks_render` — with a synthetic Phase 4 output where κ\* is null and no signature refusal exists, the generator emits both fallback texts.
-- `test_phase4_deferred_status` — with no production Phase 4 directory, `/report/kappa` returns
-  the deferred-status payload and the two chart-dependent beats use their documented fallbacks.
+- `test_phase4_status_remains_available_to_demo_generator` — with no production Phase 4 directory,
+  the internal status used by the demo generator remains explicit and the two chart-dependent beats
+  use their documented fallbacks.
 - `test_phase4_null_is_not_deferred` — a genuine completed-sweep `κ* = null` response is labelled
   as an extended-validation result, not as an unrun/deferred sweep.
 - `test_llm_off_by_default` — `/explain` returns 404 unless env var set.
@@ -100,8 +100,9 @@ status). Footer string on every ₹ view.
 ## Done-criteria (`check_phase_5`)
 1. All tests pass.
 2. `demo_script.json` exists, all eight beats present (with fallbacks where applicable), NEVER-list clean.
-3. `uvicorn vulcan_proof.api.main:app` serves `/demo/script` and `/report/kappa`; `/report/kappa`
-   returns either validated extended Phase 4 data or the explicit deferred-status payload.
+3. `uvicorn vulcan_proof.api.main:app` serves `/demo/script`, the order/plan/package endpoints,
+   and the Arm 4 policy endpoint. The UI exposes only Order, Plan, and Dispute package screens;
+   validation status is not a navigable UI surface.
 4. `phase5_REPORT.md` lists which beats used fallbacks, why, and whether the demo used smoke-only
    or extended Phase 4 evidence.
 5. Buildathon completion does not require `outputs/phase4/` production artifacts. If those artifacts

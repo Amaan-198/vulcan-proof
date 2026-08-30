@@ -3,21 +3,38 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 const EVIDENCE_ORDER = ["weight", "serial", "sealed", "packing", "geotag", "otp", "signature", "ack", "vack"];
+const DISPUTE_TYPE_LABELS = {
+  NR: "Non-Receipt",
+  NAD: "Not-As-Described",
+  EB: "Empty Box",
+};
+const EVIDENCE_DISPLAY_LABELS = {
+  ack: "Acknowledgement",
+  vack: "Verified Acknowledgement",
+};
 const DEMO_ORDER_LIMIT = 36;
 const FEATURED_DEMO = {
-  orderId: "#0097370",
-  amount: "₹45,539.34",
-  amountRounded: "₹45,539",
-  merchantId: "merchant_003138",
-  payment: "UPI",
-  decisionDay: "871",
+  orderId: "#0107201",
+  amount: "₹79,439.43",
+  amountRounded: "₹79,439",
+  merchantId: "merchant_003633",
+  payment: "Card",
+  disputeType: "Non-Receipt (NR)",
+  exposureCount: "~49",
+  exposureUnit: "per 10,000 orders",
+  fraudScore: "0.04",
+  riskMix: [
+    ["Non-Receipt (NR)", 38, "red"],
+    ["Not-As-Described (NAD)", 46, "orange"],
+    ["Empty Box (EB)", 16, "yellow"],
+  ],
+  evidence: ["Sealed packaging", "Verified acknowledgement"],
 };
 
 const navItems = [
   { id: "order", label: "Order", short: "01" },
   { id: "plan", label: "Plan", short: "02" },
   { id: "package", label: "Package", short: "03" },
-  { id: "report", label: "Report", short: "04" },
 ];
 
 const categoryColors = {
@@ -44,6 +61,23 @@ function money(value) {
   return `${sign}₹${Math.abs(amount).toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
 }
 
+function wholeMoney(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  const amount = Number(value);
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}₹${Math.abs(amount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function perTenThousandOrders(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `~${Math.round(Number(value) * 10000).toLocaleString("en-IN")} per 10,000 orders`;
+}
+
+function perTenThousandMoney(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `~${wholeMoney(Number(value) * 10000)} per 10,000 orders`;
+}
+
 function pct(value, digits = 1) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
   return `${(Number(value) * 100).toFixed(digits)}%`;
@@ -51,6 +85,28 @@ function pct(value, digits = 1) {
 
 function pretty(value) {
   return String(value || "—").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function displayDisputeType(value) {
+  const code = String(value || "").trim().toUpperCase();
+  const label = DISPUTE_TYPE_LABELS[code];
+  return label ? `${label} (${code})` : pretty(value);
+}
+
+function displayEvidenceLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  return EVIDENCE_DISPLAY_LABELS[normalized] || pretty(value);
+}
+
+function displayApiSlot(value) {
+  const slot = String(value ?? "—");
+  return slot === "others" ? "General documentation" : slot;
+}
+
+function ApiSlotValue({ value }) {
+  const slot = String(value ?? "—");
+  const isRawApiSlot = slot !== "—" && slot !== "others";
+  return <strong className={isRawApiSlot ? "api-slot-chip" : ""}>{displayApiSlot(slot)}</strong>;
 }
 
 function displayOrderId(value) {
@@ -67,7 +123,6 @@ function App() {
   const [selectedId, setSelectedId] = useState("");
   const [plan, setPlan] = useState(null);
   const [pkg, setPkg] = useState(null);
-  const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
@@ -76,12 +131,10 @@ function App() {
     let active = true;
     Promise.all([
       getJson(`/orders?category=${encodeURIComponent(category)}&limit=${DEMO_ORDER_LIMIT}&plans_only=${plansOnly}&package_ready_only=${packageReadyOnly}`),
-      getJson("/report/kappa"),
       getJson("/demo/script").catch(() => null),
     ])
-      .then(async ([orderData, reportData, script]) => {
+      .then(async ([orderData, script]) => {
         if (!active) return;
-        setReport(reportData);
         const scriptId = script?.beats?.find((beat) => beat.beat === 1)?.order_id;
         const preferredId = category === "Electronics" ? scriptId : orderData.orders?.[0]?.order_id;
         let visibleOrders = orderData.orders || [];
@@ -238,7 +291,6 @@ function App() {
               {screen === "package" && (
                 <PackageScreen pkg={pkg} loading={detailLoading} goBack={() => setScreen("plan")} />
               )}
-              {screen === "report" && <ReportScreen report={report} />}
             </>
           )}
           </>}
@@ -297,8 +349,8 @@ function LiveDemo() {
       {phase === "intro" && (
         <div className="demo-intro">
           <div className="demo-live-pill"><span />LIVE SIMULATION · VULCAN PROOF</div>
-          <h1>Watch live how Vulcan Proof can make the difference in a ₹45,539 dispute</h1>
-          <p>A customer buys an electronics order. Razorpay Vulcan correctly approves the payment. 62 days later, the customer files a chargeback — “I never received it.”</p>
+          <h1>Watch live how Vulcan Proof can make the difference in a {FEATURED_DEMO.amountRounded} dispute</h1>
+          <p>A customer buys an electronics order. Razorpay Vulcan correctly approves the payment. 62 days later, the customer files a {FEATURED_DEMO.disputeType} dispute — “I never received it.”</p>
           <button className="demo-primary-button" onClick={startSimulation} type="button">Start simulation →</button>
           <div className="demo-metadata">Order {FEATURED_DEMO.orderId} · Electronics · {FEATURED_DEMO.merchantId}</div>
         </div>
@@ -325,9 +377,9 @@ function LiveDemo() {
       {phase === "reveal" && (
         <div className="demo-reveal">
           <div className="demo-time-jump">62 DAYS LATER</div>
-          <h1>And the customer raised a bank dispute fraud...</h1>
+          <h1>And the customer filed a {FEATURED_DEMO.disputeType} dispute.</h1>
           <div className="chargeback-box">
-            <strong>CHARGEBACK FILED · VISA 13.1 · NON-RECEIPT</strong>
+            <strong>DISPUTE FILED · VISA 13.1 · {FEATURED_DEMO.disputeType.toUpperCase()}</strong>
             <em>“I never received this item. I am requesting a full refund.”</em>
           </div>
           <button className="demo-dark-button" onClick={() => setPhase("result")} type="button">Show result →</button>
@@ -347,7 +399,7 @@ function DemoCard({ accent, label, title, visible, children, badge, badgeTone = 
         <div className="demo-card-label">{label}</div>
         <h2>{title}</h2>
         <div className="demo-card-content">{children}</div>
-        <div className={`demo-card-badge demo-badge-${badgeTone}`}>{badge}</div>
+        {badge && <div className={`demo-card-badge demo-badge-${badgeTone}`}>{badge}</div>}
       </div>
     </article>
   );
@@ -367,7 +419,6 @@ function DemoOrderCard({ visible }) {
         <DemoField label="Category" value="Electronics" />
         <DemoField label="Amount" value={FEATURED_DEMO.amount} prominent />
         <DemoField label="Payment" value={FEATURED_DEMO.payment} />
-        <DemoField label="Date" value={`Day ${FEATURED_DEMO.decisionDay}`} />
       </div>
     </DemoCard>
   );
@@ -380,24 +431,19 @@ function DemoField({ label, value, prominent = false }) {
 function DemoPaymentCard({ visible }) {
   return (
     <DemoCard accent="green" label="02 / PAYMENT" title="Razorpay Vulcan" visible={visible} badge="✓ Payment approved" badgeTone="green">
-      <div className="demo-risk-score"><span className="demo-score-check">✓</span><strong>0.04</strong><small>LOW RISK</small></div>
+      <div className="demo-risk-score"><span className="demo-score-check">✓</span><span className="demo-score-label">Fraud score</span><strong>{FEATURED_DEMO.fraudScore}</strong><small>LOW RISK</small></div>
       <div className="demo-note-box">No fraud signals detected. Payment processed normally.</div>
     </DemoCard>
   );
 }
 
 function DemoRiskCard({ visible }) {
-  const risks = [
-    ["Non-Receipt", 48, "red"],
-    ["Not-As-Described", 29, "orange"],
-    ["Empty Box", 23, "yellow"],
-  ];
   return (
     <DemoCard accent="orange" label="03 / RISK" title="Vulcan Proof" visible={visible} badge="⚠ Dispute risk detected" badgeTone="orange">
-      <div className="demo-exposure"><strong>31%</strong><span>exposure</span></div>
-      <div className="demo-exposure-note">ELEVATED · Evidence window open</div>
+      <div className="demo-exposure"><strong>{FEATURED_DEMO.exposureCount}</strong><span>{FEATURED_DEMO.exposureUnit}<br />estimated exposure</span></div>
+      <div className="demo-exposure-note">MODEL ESTIMATE · Evidence window open</div>
       <div className="demo-risk-bars">
-        {risks.map(([name, value, tone]) => <div className="demo-risk-row" key={name}><div><span>{name}</span><strong>{value}%</strong></div><i><b className={`risk-fill-${tone}`} style={{ width: `${value}%` }} /></i></div>)}
+        {FEATURED_DEMO.riskMix.map(([name, value, tone]) => <div className="demo-risk-row" key={name}><div><span>{name}</span><strong>{value}%</strong></div><i><b className={`risk-fill-${tone}`} style={{ width: `${value}%` }} /></i></div>)}
       </div>
     </DemoCard>
   );
@@ -405,14 +451,14 @@ function DemoRiskCard({ visible }) {
 
 function DemoPlanCard({ visible }) {
   const evidence = [
-    ["Sealed packaging", "selected", true],
-    ["Verified acknowledgement", "selected", true],
+    [FEATURED_DEMO.evidence[0], "selected", true],
+    [FEATURED_DEMO.evidence[1], "selected", true],
     ["Weight", "—", false],
     ["Serial no.", "—", false],
     ["Geotag", "—", false],
   ];
   return (
-    <DemoCard accent="blue" label="04 / PLAN" title="Evidence plan" visible={visible} badge="Plan EV: ₹0.70">
+    <DemoCard accent="blue" label="04 / PLAN" title="Evidence plan" visible={visible}>
       <div className="demo-plan-note">Capture before dispatch:</div>
       <div className="demo-plan-list">
         {evidence.map(([name, value, selected]) => <div className={`demo-plan-row ${selected ? "selected" : ""}`} key={name}><span className="demo-plan-check">{selected ? "✓" : ""}</span><span>{name}</span><strong>{value}</strong></div>)}
@@ -423,13 +469,13 @@ function DemoPlanCard({ visible }) {
 
 function DemoResult({ onRestart }) {
   const story = [
-    ["Selected sealed packaging evidence before dispatch.", "The stored dispute package contains the captured sealed artifact."],
-    ["Selected verified acknowledgement for the order.", "The request remains part of the stored plan, bound to this order."],
+    [`Selected ${FEATURED_DEMO.evidence[0]} evidence before dispatch.`, `The captured ${FEATURED_DEMO.evidence[0].toLowerCase()} held up in the contested ${FEATURED_DEMO.disputeType} dispute.`],
+    [`Selected ${FEATURED_DEMO.evidence[1]} for the order.`, `The captured ${FEATURED_DEMO.evidence[1].toLowerCase()} supported the successful contest.`],
   ];
   return (
     <div className="demo-result">
       <section className="demo-outcome-zone">
-        <div><div className="demo-result-label">DISPUTE OUTCOME · ORDER {FEATURED_DEMO.orderId}</div><h1>Merchant lost the dispute.</h1><p>The stored simulation records a lost non-receipt dispute; the selected plan and captured package remain available for review.</p></div>
+        <div><div className="demo-result-label">DISPUTE OUTCOME · ORDER {FEATURED_DEMO.orderId}</div><h1>Merchant won the dispute.</h1><p>The stored simulation records a contested {FEATURED_DEMO.disputeType} dispute that the merchant won; both selected evidence artifacts were captured and remain available for review.</p></div>
         <div className="demo-protected"><strong>PACKAGE READY</strong><b>{FEATURED_DEMO.amountRounded}</b><span>for review</span></div>
       </section>
       <section className="demo-story-zone">
@@ -438,7 +484,7 @@ function DemoResult({ onRestart }) {
       </section>
       <section className="demo-contrast-zone">
         <strong>Without Vulcan Proof</strong>
-        <p>No one told the merchant what to collect. When the dispute arrived 62 days later, all they had was a “DELIVERED” status. The stored package preserves the evidence that was captured for this ₹45,539 order.</p>
+        <p>No one told the merchant what to collect. When the dispute arrived 62 days later, all they had was a “DELIVERED” status. The stored package preserves the evidence that was captured for this {FEATURED_DEMO.amountRounded} order.</p>
       </section>
       <button className="demo-restart-button" onClick={onRestart} type="button">← Restart simulation</button>
     </div>
@@ -509,7 +555,7 @@ function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPla
             <div className="selected-card-top"><span className="selected-label">SELECTED ORDER</span><span className="live-mark"><span />stored</span></div>
             {selectedOrder ? <>
               <div className="order-id-large">{displayOrderId(selectedOrder.order_id)}</div>
-              <div className="order-meta-line"><span>{selectedOrder.merchant_id}</span><span>·</span><span>Day {selectedOrder.decision_date}</span></div>
+              <div className="order-meta-line"><span>{selectedOrder.merchant_id}</span></div>
               <div className="value-block"><span>Order value</span><strong>{money(selectedOrder.order_value)}</strong></div>
               <div className="summary-grid">
                 <SummaryField label="Category" value={selectedOrder.category} />
@@ -519,10 +565,6 @@ function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPla
               </div>
               <button className="primary-button full-button" onClick={openPlan} type="button">Review evidence plan <span>→</span></button>
             </> : <div className="blank-selection">Select an order from the table.</div>}
-          </div>
-          <div className="note-card">
-            <div className="note-icon">i</div>
-            <div><strong>Read the plan in context</strong><p>Every selection is tied to a stored test order and its observed purchase-time features.</p></div>
           </div>
         </section>
       </div>
@@ -539,45 +581,44 @@ function PlanScreen({ plan, loading, openPackage, goBack }) {
   const stages = plan.stages || {};
   const selected = plan.evidence?.filter((item) => item.selected) || [];
   const exposure = Number(stages.exposure_probability || 0);
-  const riskLabel = exposure >= 0.02 ? "Elevated exposure" : "Baseline exposure";
   return (
     <>
       <PageIntro
         eyebrow="02 / PLAN"
         title="Evidence plan"
-        copy="The stored Arm 5 plan, with model diagnostics and per-evidence refusal reasons."
+        copy="The stored evidence plan, with model diagnostics and per-evidence refusal reasons."
         action={<button className="secondary-button" onClick={goBack} type="button">← Change order</button>}
       />
       <div className="plan-order-strip panel">
         <div className="plan-order-main"><span className="selected-label">ORDER</span><strong>{displayOrderId(plan.order.order_id)}</strong><span className={`category-tag ${categoryColors[plan.order.category] || "slate"}`}>{plan.order.category}</span></div>
         <div className="plan-order-value"><span>Value</span><strong>{money(plan.order.order_value)}</strong></div>
-        <div className="plan-order-risk"><span>Exposure</span><strong>{pct(exposure, 2)}</strong><em className={exposure >= 0.02 ? "risk-high" : "risk-normal"}>{riskLabel}</em></div>
+        <div className="plan-order-risk"><span>Estimated risk</span><strong>{perTenThousandOrders(exposure)}</strong></div>
       </div>
       <div className="plan-summary-grid">
         <section className="panel recommendation-card">
           <div className="card-kicker">RECOMMENDATION</div>
-          <div className="recommendation-title">{selected.length ? selected.map((item) => item.label).join(" + ") : "No additional evidence"}</div>
+          <div className="recommendation-title">{selected.length ? selected.map((item) => displayEvidenceLabel(item.name || item.label)).join(" + ") : "No additional evidence"}</div>
           <p>{selected.length ? "Selected from the stored plan for this order context." : "The plan keeps the pre-dispatch workflow clear for this order context."}</p>
-          <div className="recommendation-footer"><span>Plan EV</span><strong>{money(plan.plan.ev)}</strong></div>
+          <div className="recommendation-footer"><div className="recommendation-metric"><span>Estimated value added</span><strong>{perTenThousandMoney(plan.plan.ev)}</strong></div><div className="recommendation-metric"><span>Value protected on this order</span><strong>{money(plan.order.order_value)}</strong></div></div>
         </section>
         <section className="panel type-card">
           <div className="card-kicker">ESTIMATED DISPUTE MIX</div>
           <div className="type-bars">
-            {Object.entries(stages.dispute_type_probabilities || {}).map(([name, value]) => <div className="type-row" key={name}><span>{name}</span><div className="mini-track"><i style={{ width: `${Math.max(Number(value) * 100, 3)}%` }} /></div><strong>{pct(value, 0)}</strong></div>)}
+            {Object.entries(stages.dispute_type_probabilities || {}).map(([name, value]) => <div className="type-row" key={name}><span>{displayDisputeType(name)}</span><div className="mini-track"><i style={{ width: `${Math.max(Number(value) * 100, 3)}%` }} /></div><strong>{pct(value, 0)}</strong></div>)}
           </div>
-          <div className="type-footnote">Conditional on exposure</div>
         </section>
         <section className="panel comparison-card">
           <div className="card-kicker">POLICY COMPARISON</div>
-          <div className="comparison-row"><div><span className="compare-label">Arm 5 · stored</span><strong>{selected.length ? selected.map((item) => item.label).join(" + ") : "Empty"}</strong></div><span className="compare-arrow">→</span></div>
-          <div className="comparison-row muted-row"><div><span className="compare-label">Arm 4 · tuned rule</span><strong>{plan.comparison.arm4.evidence?.length ? plan.comparison.arm4.evidence.map(pretty).join(" + ") : "Empty"}</strong></div></div>
-          <div className="comparison-note">Same order · paired readout</div>
+          <div className="comparison-row"><div><span className="compare-label">Stored plan</span><strong>{selected.length ? selected.map((item) => displayEvidenceLabel(item.name || item.label)).join(" + ") : "Empty"}</strong></div><span className="compare-arrow">→</span></div>
+          <div className="comparison-row muted-row"><div><span className="compare-label">Tuned rule (Arm 4)</span><strong>{plan.comparison.arm4.evidence?.length ? plan.comparison.arm4.evidence.map(displayEvidenceLabel).join(" + ") : "Collected nothing"}</strong></div></div>
+          <div className="comparison-note">Same order · two policies side by side</div>
         </section>
       </div>
 
       <section className="panel evidence-panel">
-        <div className="panel-heading"><div><div className="card-kicker">EVIDENCE DECISION</div><h2>What made the cut</h2></div><span className="small-note">Selected items are highlighted; other rows show the stored reason code.</span></div>
+        <div className="panel-heading"><div><div className="card-kicker">EVIDENCE DECISION</div><h2>What made the cut</h2></div><span className="small-note">Selected items are highlighted; other rows show why each item was or wasn't included.</span></div>
         <div className="evidence-list">
+          <div className="evidence-table-header"><span>Evidence</span><span>API slot</span><span>Status</span></div>
           {(plan.evidence || []).map((item) => <EvidenceRow item={item} key={item.name} />)}
         </div>
       </section>
@@ -590,20 +631,17 @@ function PlanScreen({ plan, loading, openPackage, goBack }) {
 }
 
 function EvidenceRow({ item }) {
-  const value = item.incremental_ev ?? item.standalone_ev;
-  const magnitude = Math.min(Math.abs(Number(value || 0)) / 20, 1) * 100;
   return (
     <div className={`evidence-row ${item.selected ? "is-selected" : ""}`}>
-      <div className="evidence-name"><span className={`evidence-check ${item.selected ? "checked" : ""}`}>{item.selected ? "✓" : ""}</span><div><strong>{item.label}</strong><span>{pretty(item.window)} · {item.available ? "available" : "not available"}</span></div></div>
-      <div className="evidence-bar"><div className="evidence-track"><i className={Number(value) < 0 ? "negative" : ""} style={{ width: `${Math.max(magnitude, value !== null && value !== undefined ? 4 : 0)}%` }} /></div><span>{value === null || value === undefined ? "—" : money(value)}</span></div>
-      <div className="evidence-slot"><span>API slot</span><strong>{item.api_slot}</strong></div>
+      <div className="evidence-name"><span className={`evidence-check ${item.selected ? "checked" : ""}`}>{item.selected ? "✓" : ""}</span><div><strong>{displayEvidenceLabel(item.name || item.label)}</strong><span>{pretty(item.window)} · {item.available ? "available" : "not available"}</span></div></div>
+      <div className="evidence-slot"><span>API slot</span><strong>{displayApiSlot(item.api_slot)}</strong></div>
       <ReasonBadge item={item} />
     </div>
   );
 }
 
 function ReasonBadge({ item }) {
-  const labels = { SELECTED: "Selected", UNAVAILABLE: "Unavailable", INADMISSIBLE: "Not admissible", NO_SUPPORT: "Low support", NEGATIVE_STANDALONE: "Negative value", NEGATIVE_INCREMENTAL: "Overlap" };
+  const labels = { SELECTED: "Selected", UNAVAILABLE: "Unavailable", INADMISSIBLE: "Not admissible", NO_SUPPORT: "Low support", NEGATIVE_STANDALONE: "Not cost-effective", NEGATIVE_INCREMENTAL: "Overlap" };
   return <span className={`reason-badge ${item.selected ? "selected-badge" : item.reason === "NO_SUPPORT" ? "warning-badge" : ""}`}>{labels[item.reason] || pretty(item.reason)}</span>;
 }
 
@@ -613,41 +651,16 @@ function PackageScreen({ pkg, loading, goBack }) {
   return (
     <>
       <PageIntro eyebrow="03 / PACKAGE" title="Dispute package" copy="A compact handoff view for the materialised evidence bound to this order." action={<button className="secondary-button" onClick={goBack} type="button">← Back to plan</button>} />
-      <div className="package-header panel"><div><span className="selected-label">STORED OUTCOME</span><div className="package-order-id">{displayOrderId(pkg.order_id)}</div><div className="order-meta-line">{pkg.category} <span>·</span> {pkg.dispute_type} dispute <span>·</span> Arm 5</div></div><div className="package-value"><span>Order value</span><strong>{money(pkg.order_value)}</strong></div></div>
+      <div className="package-header panel"><div><span className="selected-label">DISPUTE CASE</span><div className="package-order-id">{displayOrderId(pkg.order_id)}</div><div className="order-meta-line">{pkg.category} <span>·</span> {displayDisputeType(pkg.dispute_type)} dispute</div></div><div className="package-value"><span>Order value</span><strong>{money(pkg.order_value)}</strong></div></div>
       <div className="package-layout">
         <section className="panel package-items"><div className="panel-heading"><div><div className="card-kicker">CAPTURED ARTIFACTS</div><h2>API-ready evidence</h2></div><span className="captured-count"><span />{pkg.items?.length || 0} captured</span></div>
-          {pkg.items?.length ? <div className="package-list">{pkg.items.map((item) => <div className="package-item" key={item.evidence}><span className="package-check">✓</span><div className="package-item-main"><strong>{item.label}</strong><span>{pretty(item.window)} · requested and captured</span></div><div className="package-item-slot"><span>Mapped to</span><strong>{item.api_slot}</strong></div></div>)}</div> : <div className="package-empty">No evidence materialised in the stored outcome.</div>}
+          {pkg.items?.length ? <div className="package-list">{pkg.items.map((item) => <div className="package-item" key={item.evidence}><span className="package-check">✓</span><div className="package-item-main"><strong>{displayEvidenceLabel(item.evidence || item.label)}</strong><span>{pretty(item.window)} · requested and captured</span></div><div className="package-item-slot"><span>Mapped to</span><ApiSlotValue value={item.api_slot} /></div></div>)}</div> : <div className="package-empty">No evidence materialised in the stored outcome.</div>}
         </section>
-        <section className="panel provenance-card"><div className="card-kicker">PROVENANCE</div><h2>Bound to this order</h2><div className="provenance-line"><span className="timeline-dot" /><div><strong>{displayOrderId(pkg.provenance.bound_to_order)}</strong><span>Order binding</span></div></div><div className="provenance-line"><span className="timeline-dot" /><div><strong>Day {pkg.provenance.decision_day}</strong><span>Decision point</span></div></div><div className="provenance-line"><span className="timeline-dot last" /><div><strong>Phase 3 outcome</strong><span>Stored simulator artifact</span></div></div><div className="provenance-foot">The package preserves timing and order binding for review.</div></section>
+        <section className="panel provenance-card"><div className="card-kicker">PROVENANCE</div><h2>Bound to this order</h2><div className="provenance-line"><span className="timeline-dot" /><div><strong>{displayOrderId(pkg.provenance.bound_to_order)}</strong><span>Order binding</span></div></div><div className="provenance-line"><span className="timeline-dot last" /><div><strong>System-generated decision</strong><span>Computed automatically from order data</span></div></div></section>
       </div>
-      <div className="package-footer-line"><span className="success-check">✓</span> Ready for a dispute review handoff <span className="footer-divider" /> <span>{pkg.dispute_type} · API slots mapped</span></div>
+      <div className="package-footer-line"><span className="success-check">✓</span> Ready for a dispute review handoff <span className="footer-divider" /> <span>{displayDisputeType(pkg.dispute_type)} · API slots mapped</span></div>
     </>
   );
-}
-
-function ReportScreen({ report }) {
-  if (!report) return <div className="detail-loading"><div className="spinner" /><span>Loading the validation status…</span></div>;
-  const deferred = report.production_results_available !== true;
-  const smoke = report.smoke_simulator_result || {};
-  return (
-    <>
-      <PageIntro eyebrow="04 / REPORT" title="Validation report" copy="A concise readout of what is available for this buildathon demo." action={<span className={`scope-pill ${deferred ? "deferred" : "complete"}`}>{deferred ? "Smoke scope" : "Extended scope"}</span>} />
-      <section className={`validation-card panel ${deferred ? "deferred-card" : "complete-card"}`}><div className="validation-icon">{deferred ? "…" : "✓"}</div><div className="validation-copy"><div className="card-kicker">PHASE 4 STATUS</div><h2>{deferred ? "Production-scale robustness validation is deferred" : "Extended validation is available"}</h2><p>{report.message || "The completed Phase 4 artefacts are available for review."}</p></div><div className="validation-side"><span>Result scope</span><strong>{deferred ? "Buildathon smoke" : "Extended validation"}</strong><em>{deferred ? "No production result surfaced" : "Artefacts complete"}</em></div></section>
-      <div className="report-grid">
-        <section className="panel smoke-card"><div className="panel-heading"><div><div className="card-kicker">SMOKE VALIDATION</div><h2>Simulator comparison</h2></div><span className="mini-status">available</span></div>{deferred ? <><div className="smoke-metric"><span>Arm 5 − Arm 4 net / 1,000</span><strong>{money(smoke.arm5_minus_arm4_net_per_1000)}</strong></div><div className="ci-range"><span>95% interval</span><strong>{money(smoke.ci_low)} <i>to</i> {money(smoke.ci_high)}</strong></div><div className="metric-caption">Smoke simulator validation at κ = {smoke.kappa ?? "—"}. This is not a production measurement.</div></> : <ExtendedReport report={report} />}</section>
-        <section className="panel anchor-card"><div className="card-kicker">REAL-DATA ANCHOR</div><h2>Olist detection</h2><p>Public marketplace data is used for detection only; it has no dispute or evidence fields.</p><div className="anchor-stat-grid"><AnchorStat label="PR-AUC" value={report.phase0?.pr_auc} /><AnchorStat label="ROC-AUC" value={report.phase0?.roc_auc} /><AnchorStat label="Top-decile lift" value={report.phase0?.top_decile_lift} /></div><div className="olist-footer">Olist public dataset · Brazil 2016–18 · no chargeback or evidence data · detection only</div></section>
-      </div>
-      <div className="report-note"><span className="note-icon">i</span><span>Phase 5 keeps validation scope visible. A missing extended result is not converted into a numeric κ*.</span></div>
-    </>
-  );
-}
-
-function ExtendedReport({ report }) {
-  return <div className="extended-readout"><div className="smoke-metric"><span>κ*</span><strong>{report.kappa_star ?? "not found on [0, 1]"}</strong></div><div className="ci-range"><span>Verdict</span><strong>{pretty(report.verdict)}</strong></div><div className="metric-caption">Extended validation artefacts have passed the Phase 4 completeness gate.</div></div>;
-}
-
-function AnchorStat({ label, value }) {
-  return <div className="anchor-stat"><span>{label}</span><strong>{value === undefined ? "—" : Number(value).toFixed(3)}</strong></div>;
 }
 
 createRoot(document.getElementById("root")).render(<App />);

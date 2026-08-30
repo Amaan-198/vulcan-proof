@@ -101,9 +101,9 @@ npm run dev:all
 
 Open `http://localhost:5173`. `dev:all` generates the Phase 5 demo artefacts when they are missing,
 starts Vite on port 5173, and starts FastAPI on port 8765 with the Vite API proxy. The demo is
-laptop-first and keeps the Phase 4 production-scale validation status visible; the current buildathon
-artefacts are smoke-only. The optional `/explain` route is disabled unless `VP_EXPLAIN_LLM=1`; it
-cannot change a plan.
+laptop-first. The generated walkthrough records whether the Phase 4 production-scale validation is
+available; the current buildathon artefacts are smoke-only. The optional `/explain` route is disabled
+unless `VP_EXPLAIN_LLM=1`; it cannot change a plan.
 
 ## How to work in this repo
 

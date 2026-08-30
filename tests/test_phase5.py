@@ -24,11 +24,19 @@ def phase5_service():
     return Phase5Service(root=ROOT)
 
 
-def test_phase4_deferred_status(phase5_service) -> None:
-    payload = phase5_service.kappa_report()
+def test_phase4_status_remains_available_to_demo_generator(phase5_service) -> None:
+    payload = phase5_service.phase4_status()
     if not (ROOT / "outputs" / "phase4" / "kappa_star.json").is_file():
         assert payload["production_sweep"] == "deferred"
         assert payload["production_results_available"] is False
+
+
+def test_report_panel_route_is_removed() -> None:
+    from vulcan_proof.api.main import app
+
+    assert "/report/kappa" not in {
+        route.path for route in app.routes if hasattr(route, "path")
+    }
 
 
 def test_demo_script_contains_eight_beats(phase5_service) -> None:

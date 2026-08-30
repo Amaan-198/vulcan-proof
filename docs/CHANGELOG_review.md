@@ -166,9 +166,8 @@ Smoke/end-to-end validation: completed. Full production sweep: deferred. Larger 
 
 ## Phase 5 deferred-evidence compatibility amendment (2026-08-27)
 
-Phase 5 is now required to operate without Phase 4 production outputs. In buildathon mode,
-`/report/kappa`, the UI, and the generated demo script must expose an explicit deferred-validation
-status and documented fallbacks rather than failing or treating an absent result as `κ* = null`.
-Only genuine completed Phase 4 sweep artefacts may supply a κ result or production-scale robustness
-claim. This keeps the product surface verifiable now while preserving a clean path to add the later
-publication-grade evidence.
+Phase 5 is now required to operate without Phase 4 production outputs. In buildathon mode, the
+generated demo script must expose an explicit deferred-validation status and documented fallbacks
+rather than failing or treating an absent result as `κ* = null`. Only genuine completed Phase 4 sweep
+artefacts may supply a κ result or production-scale robustness claim. The UI has no validation-report
+screen; the status remains available in the generated walkthrough and underlying artefacts.

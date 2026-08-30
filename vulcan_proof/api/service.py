@@ -385,7 +385,7 @@ class Phase5Service:
             }
         )
 
-    def kappa_report(self) -> dict[str, Any]:
+    def phase4_status(self) -> dict[str, Any]:
         """Return extended Phase-4 data or the explicit buildathon status."""
         phase4 = self.root / "outputs" / "phase4"
         chart_names = (
@@ -449,7 +449,7 @@ class Phase5Service:
         return _json_value(payload)
 
     def phase0_summary(self) -> dict[str, Any]:
-        """Return the small Olist detection anchor used by the report screen."""
+        """Return the small Olist detection anchor used by the demo script."""
         metrics_path = self.root / "outputs" / "phase0" / "metrics.json"
         if not metrics_path.is_file():
             return {"available": False}

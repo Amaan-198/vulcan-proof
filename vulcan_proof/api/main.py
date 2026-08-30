@@ -77,12 +77,6 @@ def dispute_package(order_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@app.get("/report/kappa")
-def kappa_report() -> dict[str, Any]:
-    """Return the explicit Phase-4 validation state."""
-    return service().kappa_report()
-
-
 @app.get("/report/arm4-policy")
 def arm4_policy() -> dict[str, Any]:
     """Return the stored validation-tuned Arm 4 table."""

@@ -70,7 +70,7 @@ def build_demo_script(
         from .service import Phase5Service
 
         service = Phase5Service(root=root, params=params)
-    report = service.kappa_report()
+    phase4_status = service.phase4_status()
     orders = service._test_rows()
     outcomes = service.arm5_outcome.set_index("order_id")
     test_ids = set(orders["order_id"].astype(str))
@@ -233,7 +233,7 @@ def build_demo_script(
         beat_five["order_id"] = apparel_id
         beat_five["copy"] = "A higher-risk Apparel example is available in the stored Arm 5 plan."
 
-    deferred = _phase4_deferred(report)
+    deferred = _phase4_deferred(phase4_status)
     beat_six = {
         "beat": BEAT_SIX,
         "title": "Defense-only readout",
@@ -263,7 +263,7 @@ def build_demo_script(
         "fallback_used": deferred,
         "fallback_reason": "Phase 4 chart artefacts are deferred for the buildathon." if deferred else None,
         "phase0": phase0,
-        "report_status": report,
+        "phase4_status": phase4_status,
         "copy": (
             "Phase 0 detection evidence is available. Production-scale robustness validation is deferred; smoke validation is available."
             if deferred
@@ -277,7 +277,7 @@ def build_demo_script(
         "source": {
             "phase3_world": str(service.phase3_dir),
             "phase3_outcome": str(service.phase3_outcome_path),
-            "phase4_status": report.get("validation_scope"),
+            "phase4_status": phase4_status.get("validation_scope"),
         },
         "beats": [beat_one, beat_two, beat_three, beat_four, beat_five, beat_six, beat_seven, beat_eight],
         "simulator_footer": str(params["report.simulator_footer"]),
