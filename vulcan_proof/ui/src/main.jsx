@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { BadgeCheck, Barcode, Check, CheckCheck, CheckCircle2, KeyRound, LoaderCircle, MapPin, Package, PackageCheck, Signature, Weight, X } from "lucide-react";
 import "./styles.css";
 
 const EVIDENCE_ORDER = ["weight", "serial", "sealed", "packing", "geotag", "otp", "signature", "ack", "vack"];
@@ -98,6 +99,37 @@ function displayEvidenceLabel(value) {
   return EVIDENCE_DISPLAY_LABELS[normalized] || pretty(value);
 }
 
+const EVIDENCE_ICONS = {
+  weight: Weight,
+  serial: Barcode,
+  sealed: PackageCheck,
+  packing: Package,
+  geotag: MapPin,
+  otp: KeyRound,
+  signature: Signature,
+  ack: CheckCheck,
+  vack: BadgeCheck,
+};
+
+function evidenceIconKey(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  if (normalized.startsWith("verified acknowledgement")) return "vack";
+  if (normalized.startsWith("sealed")) return "sealed";
+  if (normalized.startsWith("packing")) return "packing";
+  if (normalized.startsWith("serial")) return "serial";
+  if (normalized === "ack" || normalized.startsWith("acknowledgement")) return "ack";
+  if (normalized.startsWith("otp")) return "otp";
+  if (normalized.startsWith("signature")) return "signature";
+  if (normalized.startsWith("geotag")) return "geotag";
+  if (normalized.startsWith("weight")) return "weight";
+  return normalized;
+}
+
+function EvidenceIcon({ value }) {
+  const Icon = EVIDENCE_ICONS[evidenceIconKey(value)];
+  return Icon ? <Icon className="evidence-type-icon" size={14} strokeWidth={1.8} aria-hidden="true" focusable="false" /> : null;
+}
+
 function displayApiSlot(value) {
   const slot = String(value ?? "—");
   return slot === "others" ? "General documentation" : slot;
@@ -125,10 +157,13 @@ function App() {
   const [pkg, setPkg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [orderTableReady, setOrderTableReady] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
+    let revealTimer;
+    setOrderTableReady(false);
     Promise.all([
       getJson(`/orders?category=${encodeURIComponent(category)}&limit=${DEMO_ORDER_LIMIT}&plans_only=${plansOnly}&package_ready_only=${packageReadyOnly}`),
       getJson("/demo/script").catch(() => null),
@@ -145,14 +180,19 @@ function App() {
         setOrders(visibleOrders);
         setSelectedId(preferredId && visibleOrders.some((order) => order.order_id === preferredId) ? preferredId : visibleOrders[0]?.order_id || "");
         setLoading(false);
+        revealTimer = window.setTimeout(() => {
+          if (active) setOrderTableReady(true);
+        }, 680);
       })
       .catch((reason) => {
         if (!active) return;
         setError(reason.message);
         setLoading(false);
+        setOrderTableReady(true);
       });
     return () => {
       active = false;
+      if (revealTimer) window.clearTimeout(revealTimer);
     };
   }, [category, plansOnly, packageReadyOnly]);
 
@@ -216,6 +256,25 @@ function App() {
     setScreen(next);
   }
 
+  const orderView = (
+    <OrderScreen
+      category={category}
+      setCategory={setCategory}
+      query={query}
+      setQuery={setQuery}
+      plansOnly={plansOnly}
+      setPlansOnly={setPlansOnly}
+      packageReadyOnly={packageReadyOnly}
+      setPackageReadyOnly={setPackageReadyOnly}
+      orders={filteredOrders}
+      selectedId={selectedId}
+      setSelectedId={setSelectedId}
+      selectedOrder={selectedOrder}
+      tableLoading={loading || !orderTableReady}
+      openPlan={() => openPlan()}
+    />
+  );
+
   return (
     <div className="app-shell">
       <aside className="rail">
@@ -266,32 +325,16 @@ function App() {
         <div className="content-wrap">
           {screen === "demo" ? <LiveDemo /> : <>
           {error && <div className="error-banner" role="alert"><span>!</span>{error}<button onClick={() => setError("")} type="button">Dismiss</button></div>}
-          {loading ? <LoadingState /> : (
-            <>
-              {screen === "order" && (
-                <OrderScreen
-                  category={category}
-                  setCategory={setCategory}
-                  query={query}
-                  setQuery={setQuery}
-                  plansOnly={plansOnly}
-                  setPlansOnly={setPlansOnly}
-                  packageReadyOnly={packageReadyOnly}
-                  setPackageReadyOnly={setPackageReadyOnly}
-                  orders={filteredOrders}
-                  selectedId={selectedId}
-                  setSelectedId={setSelectedId}
-                  selectedOrder={selectedOrder}
-                  openPlan={() => openPlan()}
-                />
-              )}
+          {loading && screen !== "order" ? <LoadingState /> : (
+            <div className="workspace-screen" key={screen}>
+              {screen === "order" && orderView}
               {screen === "plan" && (
                 <PlanScreen plan={plan} loading={detailLoading} openPackage={openPackage} goBack={() => setScreen("order")} />
               )}
               {screen === "package" && (
                 <PackageScreen pkg={pkg} loading={detailLoading} goBack={() => setScreen("plan")} />
               )}
-            </>
+            </div>
           )}
           </>}
         </div>
@@ -380,7 +423,6 @@ function LiveDemo() {
 
       {currentPhase === "cards" && (
         <div className="demo-cards-phase">
-          <div className="demo-step-hint" aria-live="polite">{visibleCards === 4 ? "All stages shown" : `Step ${visibleCards} of 4 — click Next to continue`}</div>
           <div className="demo-cards-row">
             <DemoOrderCard visible />
             <DemoArrow visible={visibleArrows >= 1} />
@@ -493,19 +535,26 @@ function DemoPlanCard({ visible }) {
     <DemoCard accent="blue" label="04 / PLAN" title="Evidence plan" visible={visible}>
       <div className="demo-plan-note">Capture before dispatch:</div>
       <div className="demo-plan-list">
-        {evidence.map(([name, value, selected]) => <div className={`demo-plan-row ${selected ? "selected" : ""}`} key={name}><span className="demo-plan-check">{selected ? "✓" : ""}</span><span>{name}</span><strong>{value}</strong></div>)}
+        {evidence.map(([name, value, selected]) => <div className={`demo-plan-row ${selected ? "selected" : ""}`} key={name}><span className="demo-plan-check">{selected ? "✓" : ""}</span><span className="demo-plan-name"><EvidenceIcon value={name} /><span>{name}</span></span><strong>{value}</strong></div>)}
       </div>
     </DemoCard>
   );
 }
 
 function DemoResult({ onRestart }) {
-  const story = [
+  const withProof = [
     "Evaluated the order before dispatch — not after a dispute was filed.",
     "Weighed the cost of each evidence type against its likely payoff.",
-    `Selected ${FEATURED_DEMO.evidence[0]} evidence before dispatch.`,
-    `Selected ${FEATURED_DEMO.evidence[1]} for the order.`,
+    "Recommended sealed packaging evidence before dispatch.",
+    "Recommended verified acknowledgement for the order.",
     "The dispute needed exactly this evidence — and Vulcan Proof had it ready.",
+  ];
+  const withoutProof = [
+    "No evaluation before dispatch.",
+    "No evidence plan in place.",
+    "Just a \"DELIVERED\" status when the dispute arrived.",
+    "Nothing to contest with.",
+    `${FEATURED_DEMO.amountRounded} order left undefended.`,
   ];
   return (
     <div className="demo-result">
@@ -513,13 +562,15 @@ function DemoResult({ onRestart }) {
         <div><div className="demo-result-label">DISPUTE OUTCOME · ORDER {FEATURED_DEMO.orderId}</div><h1>Merchant won the dispute.</h1></div>
         <div className="demo-protected"><strong>PACKAGE READY</strong><b>{FEATURED_DEMO.amountRounded}</b><span>for review</span></div>
       </section>
-      <section className="demo-story-zone">
-        <div className="demo-result-label">What Vulcan Proof did</div>
-        {story.map((item) => <div className="demo-story-row" key={item}><span>✓</span><strong>{item}</strong></div>)}
-      </section>
-      <section className="demo-contrast-zone">
-        <strong>Without Vulcan Proof</strong>
-        <p>No evidence, no case. Just a 'DELIVERED' status — and a {FEATURED_DEMO.amountRounded} order left undefended.</p>
+      <section className="demo-comparison-zone">
+        <div className="demo-comparison-column demo-comparison-positive">
+          <div className="demo-comparison-heading"><div className="demo-result-label">WITH VULCAN PROOF</div></div>
+          {withProof.map((item) => <div className="demo-comparison-row" key={item}><span className="comparison-icon"><Check size={14} strokeWidth={2.4} aria-hidden="true" focusable="false" /></span><strong>{item}</strong></div>)}
+        </div>
+        <div className="demo-comparison-column demo-comparison-negative">
+          <div className="demo-comparison-heading"><div className="demo-result-label">WITHOUT VULCAN PROOF</div></div>
+          {withoutProof.map((item) => <div className="demo-comparison-row" key={item}><span className="comparison-icon"><X size={14} strokeWidth={2.4} aria-hidden="true" focusable="false" /></span><strong>{item}</strong></div>)}
+        </div>
       </section>
       <button className="demo-restart-button" onClick={onRestart} type="button">← Restart simulation</button>
     </div>
@@ -543,7 +594,7 @@ function PageIntro({ eyebrow, title, copy, action }) {
   );
 }
 
-function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPlansOnly, packageReadyOnly, setPackageReadyOnly, orders, selectedId, setSelectedId, selectedOrder, openPlan }) {
+function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPlansOnly, packageReadyOnly, setPackageReadyOnly, orders, selectedId, setSelectedId, selectedOrder, tableLoading, openPlan }) {
   const categories = ["Electronics", "Jewellery", "Apparel", "Home", "FMCG"];
   return (
     <>
@@ -557,7 +608,7 @@ function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPla
         <section className="panel order-browser">
           <div className="panel-heading compact-heading">
             <div><h2>Test orders</h2><span className="muted">{packageReadyOnly ? "Stored orders with dispute packages" : plansOnly ? "Stored orders with evidence plans" : "Canonical Phase 3 slice"}</span></div>
-            <span className="result-count">{orders.length} {packageReadyOnly ? "package-ready" : plansOnly ? "plan examples" : "shown"}</span>
+            <span className="result-count">{tableLoading ? "checking" : `${orders.length} ${packageReadyOnly ? "package-ready" : plansOnly ? "plan examples" : "shown"}`}</span>
           </div>
           <div className="filter-row">
             <div className="search-field"><span className="search-icon">⌕</span><input aria-label="Search orders" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search order or merchant" /></div>
@@ -568,27 +619,29 @@ function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPla
             <label className="plan-filter"><input aria-label="Show package-ready examples only" type="checkbox" checked={packageReadyOnly} disabled={!plansOnly} onChange={(event) => setPackageReadyOnly(event.target.checked)} /><span>Package ready</span></label>
           </div>
           <div className="order-table-wrap">
-            <table className="order-table">
-              <thead><tr><th>Order</th><th>Category</th><th>Value</th><th>Tier</th></tr></thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr className={selectedId === order.order_id ? "selected" : ""} onClick={() => setSelectedId(order.order_id)} key={order.order_id}>
-                    <td><div className="order-cell"><span className="row-radio">{selectedId === order.order_id ? "✓" : ""}</span><span>{displayOrderId(order.order_id)}</span></div><small>{order.merchant_id} · {order.has_plan ? <><span className="order-status plan-status">evidence plan</span><span className={`order-status ${order.package_available ? "ready-status" : "plan-only-status"}`}>{order.package_available ? "package ready" : "plan only"}</span></> : <span className="order-status empty-status">no evidence selected</span>}</small></td>
-                    <td><span className={`category-tag ${categoryColors[order.category] || "slate"}`}>{order.category}</span></td>
-                    <td className="money-cell">{money(order.order_value)}</td>
-                    <td><span className="tier-label">{pretty(order.eligible_tier)}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!orders.length && <div className="empty-table">{packageReadyOnly ? `No package-ready examples are available for ${category} in this world. Turn off “Package ready” to inspect plan examples.` : plansOnly ? `No stored evidence-bearing examples are available for ${category} in this world. Turn off “Plans only” to inspect the full slice.` : "No matching orders in this slice."}</div>}
+            {tableLoading ? <div className="order-table-loading" role="status" aria-live="polite"><LoaderCircle className="order-table-loading-icon" size={22} strokeWidth={1.8} /><strong>Checking stored orders</strong><span>Preparing the canonical test slice</span></div> : <>
+              <table className="order-table">
+                <thead><tr><th>Order</th><th>Category</th><th>Value</th><th>Tier</th></tr></thead>
+                <tbody>
+                  {orders.map((order) => (
+                    <tr className={selectedId === order.order_id ? "selected" : ""} onClick={() => setSelectedId(order.order_id)} key={order.order_id}>
+                      <td><div className="order-cell"><span className="row-radio">{selectedId === order.order_id ? "✓" : ""}</span><span>{displayOrderId(order.order_id)}</span></div><small>{order.merchant_id} · {order.has_plan ? <><span className="order-status plan-status">evidence plan</span><span className={`order-status ${order.package_available ? "ready-status" : "plan-only-status"}`}>{order.package_available ? "package ready" : "plan only"}</span></> : <span className="order-status empty-status">no evidence selected</span>}</small></td>
+                      <td><span className={`category-tag ${categoryColors[order.category] || "slate"}`}>{order.category}</span></td>
+                      <td className="money-cell">{money(order.order_value)}</td>
+                      <td><span className="tier-label">{pretty(order.eligible_tier)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!orders.length && <div className="empty-table">{packageReadyOnly ? `No package-ready examples are available for ${category} in this world. Turn off “Package ready” to inspect plan examples.` : plansOnly ? `No stored evidence-bearing examples are available for ${category} in this world. Turn off “Plans only” to inspect the full slice.` : "No matching orders in this slice."}</div>}
+            </>}
           </div>
         </section>
 
         <section className="order-summary-column">
           <div className="selected-card panel">
             <div className="selected-card-top"><span className="selected-label">SELECTED ORDER</span><span className="live-mark"><span />stored</span></div>
-            {selectedOrder ? <>
+            {selectedOrder ? <div className="selected-order-content" key={selectedOrder.order_id}>
               <div className="order-id-large">{displayOrderId(selectedOrder.order_id)}</div>
               <div className="order-meta-line"><span>{selectedOrder.merchant_id}</span></div>
               <div className="value-block"><span>Order value</span><strong>{money(selectedOrder.order_value)}</strong></div>
@@ -599,7 +652,7 @@ function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPla
                 <SummaryField label="Source" value="Phase 3" />
               </div>
               <button className="primary-button full-button" onClick={openPlan} type="button">Review evidence plan <span>→</span></button>
-            </> : <div className="blank-selection">Select an order from the table.</div>}
+            </div> : <div className="blank-selection">Select an order from the table.</div>}
           </div>
         </section>
       </div>
@@ -612,6 +665,14 @@ function SummaryField({ label, value }) {
 }
 
 function PlanScreen({ plan, loading, openPackage, goBack }) {
+  const [recomputing, setRecomputing] = useState(true);
+
+  useEffect(() => {
+    setRecomputing(true);
+    const verificationTimer = window.setTimeout(() => setRecomputing(false), 720);
+    return () => window.clearTimeout(verificationTimer);
+  }, [plan?.order?.order_id]);
+
   if (loading || !plan) return <div className="detail-loading"><div className="spinner" /><span>Preparing the evidence readout…</span></div>;
   const stages = plan.stages || {};
   const selected = plan.evidence?.filter((item) => item.selected) || [];
@@ -658,7 +719,10 @@ function PlanScreen({ plan, loading, openPackage, goBack }) {
         </div>
       </section>
       <div className="plan-bottom-row">
-        <div className="diagnostic-line"><span className="diagnostic-dot" />Model recomputation matches stored plan: <strong>{plan.comparison.model_recomputed_mask_matches_stored ? "yes" : "stored mask retained"}</strong></div>
+        <div className={`diagnostic-line ${recomputing ? "is-checking" : "is-confirmed"}`} role="status" aria-live="polite">
+          <span className="diagnostic-icon">{recomputing ? <LoaderCircle size={15} strokeWidth={1.9} aria-hidden="true" focusable="false" /> : <CheckCircle2 size={15} strokeWidth={2.1} aria-hidden="true" focusable="false" />}</span>
+          {recomputing ? "Checking stored plan match…" : <>Model recomputation matches stored plan: <strong>{plan.comparison.model_recomputed_mask_matches_stored ? "yes" : "stored mask retained"}</strong></>}
+        </div>
         {plan.package_available ? <button className="primary-button" onClick={openPackage} type="button">Open dispute package <span>→</span></button> : <div className="package-unavailable"><strong>Package not available</strong><span>No opened dispute with captured evidence for this order.</span></div>}
       </div>
     </>
@@ -668,7 +732,7 @@ function PlanScreen({ plan, loading, openPackage, goBack }) {
 function EvidenceRow({ item }) {
   return (
     <div className={`evidence-row ${item.selected ? "is-selected" : ""}`}>
-      <div className="evidence-name"><span className={`evidence-check ${item.selected ? "checked" : ""}`}>{item.selected ? "✓" : ""}</span><div><strong>{displayEvidenceLabel(item.name || item.label)}</strong><span>{pretty(item.window)} · {item.available ? "available" : "not available"}</span></div></div>
+      <div className="evidence-name"><span className={`evidence-check ${item.selected ? "checked" : ""}`}>{item.selected ? "✓" : ""}</span><div><div className="evidence-type-name"><EvidenceIcon value={item.name || item.label} /><strong>{displayEvidenceLabel(item.name || item.label)}</strong></div><span>{pretty(item.window)} · {item.available ? "available" : "not available"}</span></div></div>
       <div className="evidence-slot"><span>API slot</span><strong>{displayApiSlot(item.api_slot)}</strong></div>
       <ReasonBadge item={item} />
     </div>
@@ -689,7 +753,7 @@ function PackageScreen({ pkg, loading, goBack }) {
       <div className="package-header panel"><div><span className="selected-label">DISPUTE CASE</span><div className="package-order-id">{displayOrderId(pkg.order_id)}</div><div className="order-meta-line">{pkg.category} <span>·</span> {displayDisputeType(pkg.dispute_type)} dispute</div></div><div className="package-value"><span>Order value</span><strong>{money(pkg.order_value)}</strong></div></div>
       <div className="package-layout">
         <section className="panel package-items"><div className="panel-heading"><div><div className="card-kicker">CAPTURED ARTIFACTS</div><h2>API-ready evidence</h2></div><span className="captured-count"><span />{pkg.items?.length || 0} captured</span></div>
-          {pkg.items?.length ? <div className="package-list">{pkg.items.map((item) => <div className="package-item" key={item.evidence}><span className="package-check">✓</span><div className="package-item-main"><strong>{displayEvidenceLabel(item.evidence || item.label)}</strong><span>{pretty(item.window)} · requested and captured</span></div><div className="package-item-slot"><span>Mapped to</span><ApiSlotValue value={item.api_slot} /></div></div>)}</div> : <div className="package-empty">No evidence materialised in the stored outcome.</div>}
+          {pkg.items?.length ? <div className="package-list">{pkg.items.map((item) => <div className="package-item" key={item.evidence}><span className="package-check">✓</span><div className="package-item-main"><div className="evidence-type-name"><EvidenceIcon value={item.evidence || item.label} /><strong>{displayEvidenceLabel(item.evidence || item.label)}</strong></div><span>{pretty(item.window)} · requested and captured</span></div><div className="package-item-slot"><span>Mapped to</span><ApiSlotValue value={item.api_slot} /></div></div>)}</div> : <div className="package-empty">No evidence materialised in the stored outcome.</div>}
         </section>
         <section className="panel provenance-card"><div className="card-kicker">PROVENANCE</div><h2>Bound to this order</h2><div className="provenance-line"><span className="timeline-dot" /><div><strong>{displayOrderId(pkg.provenance.bound_to_order)}</strong><span>Order binding</span></div></div><div className="provenance-line"><span className="timeline-dot last" /><div><strong>System-generated decision</strong><span>Computed automatically from order data</span></div></div></section>
       </div>
