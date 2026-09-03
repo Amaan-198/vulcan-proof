@@ -146,6 +146,23 @@ The runtime is CPU-only with no GPU and no paid APIs. The optional explanation r
 default and can render a sentence from an existing plan; it has no authority over the decision.
 All decision-making remains in the local model and optimizer path.
 
+## Quick guide
+
+From the repository root in PowerShell:
+
+1. Create the Python environment, install the locked dependencies, and run the environment check
+   using the commands in [Install and run](#install-and-run).
+2. Install the local UI dependencies and start the product surface:
+
+   ```powershell
+   npm ci --prefix vulcan_proof/ui
+   npm run dev:all
+   ```
+3. Open the order view in the browser, inspect an evidence plan, review its evidence types and
+   refusal reasons, and open the dispute package for an order with materialized evidence.
+4. Use the task runner's `test` and `check-phase` commands when you want to validate the local
+   build or inspect a phase result.
+
 ## Install and run
 
 From the repository root in PowerShell:
