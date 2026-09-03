@@ -118,8 +118,8 @@ def test_prior_stats_are_strictly_past() -> None:
 
     history = _history_features(labels, items, orders, customers, P)
 
-    # Ten days is inside the configured 75-day maturity window, so b cannot
-    # observe a's outcome.  By c's purchase, both earlier outcomes are mature.
+    # The first later purchase is inside the configured maturity window, so b
+    # cannot observe a's outcome. By c's purchase, both earlier outcomes are mature.
     assert int(history.loc["b", "seller_prior_orders"]) == 0
     assert int(history.loc["c", "seller_prior_orders"]) == 2
     train_rate = labels.loc[labels["purchase_ts"] < pd.Timestamp("2018-03-01"), "label"].mean()

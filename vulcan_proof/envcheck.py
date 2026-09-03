@@ -7,7 +7,7 @@ import sys
 
 
 def require_venv() -> None:
-    """Exit unless the process is Python 3.13 inside this repository's venv."""
+    """Exit unless the process uses the locked project environment."""
     repo_root = pathlib.Path(__file__).resolve().parents[1]
     expected = (repo_root / ".venv").resolve()
     prefix = pathlib.Path(sys.prefix).resolve()

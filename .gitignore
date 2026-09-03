@@ -31,3 +31,6 @@ playwright-report/
 test-results/
 blob-report/
 vulcan_proof/ui/dist/
+
+# Local backup created for the documentation and comments audit
+doc-audit/

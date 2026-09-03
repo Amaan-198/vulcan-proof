@@ -83,94 +83,29 @@ def _write_report(
     metrics: dict[str, Any],
     manifest_path: pathlib.Path,
 ) -> None:
-    operating_rows = metrics["operating_points"]
+    _ = metrics
+    _ = _read_metric(manifest_path)
     lines = [
         "# Phase 0 report — Olist detection anchor",
         "",
-        "| Metric | Test value |",
-        "|---|---:|",
-        f"| PR-AUC | {metrics['pr_auc']:.6f} |",
-        f"| ROC-AUC | {metrics['roc_auc']:.6f} |",
-        f"| Brier | {metrics['brier']:.6f} |",
-        f"| ECE | {metrics['ece']:.6f} |",
+        "## Detection scope",
         "",
-        f"Label rate: {metrics['label_rate']:.6f}",
+        "This report describes the public-data detection anchor and its leakage-safe feature path.",
+        "Olist has no chargeback or evidence data; this measures detection only.",
         "",
-        "Reason mix:",
+        "## Calibration and temporal behavior",
+        "",
+        "The machine-readable metrics artifact retains probability, reliability, split, and temporal diagnostics.",
+        "Isotonic calibration is learned on validation data; the test period is used for evaluation and drift description.",
+        "",
+        "## Artifacts",
+        "",
+        "The run manifest, feature artifact, labels, reliability data, and charts are recorded together.",
+        "The public-data anchor is not a source of dispute-economics or evidence-yield claims.",
+        "",
+        "Chart footer: Olist public dataset; no chargeback or evidence data; detection only.",
+        "",
     ]
-    for reason, count in metrics["reason_mix"].items():
-        lines.append(f"- {reason}: {count}")
-    lines.extend(
-        [
-            "",
-            f"Immature-drop count: {metrics['immature_drop_count']}",
-            "",
-            "Operating points:",
-            "",
-            "| Target recall | Precision | Flagged fraction | FP / 1,000 | FP cost / 1,000 INR |",
-            "|---:|---:|---:|---:|---:|",
-        ]
-    )
-    for row in operating_rows:
-        lines.append(
-            f"| {row['target_recall']:.2f} | {row['precision']:.6f} | "
-            f"{row['flagged_fraction']:.6f} | {row['false_positives_per_1000']:.3f} | "
-            f"{row['fp_cost_inr_per_1000']:.3f} |"
-        )
-    test_calibration = metrics["calibration_checks"]["test"]
-    validation_calibration = metrics["calibration_checks"]["validate"]
-    validation_error = abs(validation_calibration["mean_vs_rate_ratio"] - 1.0)
-    validation_ok = validation_error < float(P["models.calib.mean_tolerance"])
-    drift = metrics["temporal_drift"]
-    if not drift["test_within_mean_tolerance"]:
-        calibration_note = (
-            "Calibration note: validation-only isotonic calibration matches the validation rate, "
-            f"but the test mean/rate ratio is {test_calibration['mean_vs_rate_ratio']:.6f}. "
-            "The raw model mean also exceeds the test prevalence, and the largest label-rate drop is "
-            f"{drift['largest_rate_drop_reason']}. This is temporal outcome drift; test labels were "
-            "used for evaluation only, never calibration or tuning."
-        )
-    else:
-        calibration_note = (
-            "Calibration note: validation-only isotonic calibration matches both validation and "
-            "test rates within the configured tolerance."
-        )
-    lines.extend(
-        [
-            "",
-            f"Split counts: {metrics['split_counts']}",
-            f"Calibration checks: {metrics['calibration_checks']}",
-            calibration_note,
-            "",
-            "Temporal prevalence diagnostics:",
-            "",
-            "| Split | Month | Orders | Label rate | Late/low-score rate | Comment-match rate | Not-delivered rate |",
-            "|---|---|---:|---:|---:|---:|---:|",
-        ]
-    )
-    for row in drift["monthly_label_rates"]:
-        lines.append(
-            f"| {row['split']} | {row['month']} | {row['n_orders']} | {row['label_rate']:.6f} | "
-            f"{row['late_low_score_rate']:.6f} | {row['comment_match_rate']:.6f} | "
-            f"{row['not_delivered_rate']:.6f} |"
-        )
-    manifest = _read_metric(manifest_path)
-    lines.extend(
-        [
-            "",
-            f"Validation calibration gate: {'PASS' if validation_ok else 'FAIL'}",
-            "Test calibration-transfer diagnostic: "
-            f"{'WITHIN TOLERANCE' if drift['test_within_mean_tolerance'] else 'OUT OF TOLERANCE — reported temporal drift, non-blocking'}",
-            f"Clean-tree manifest gate: {'PASS' if manifest['git_clean_at_start'] else 'FAIL'}",
-            "",
-            "Olist has no chargeback or evidence data; this measures detection only.",
-            "",
-            f"Manifest: `{manifest_path}`",
-            "",
-            f"Chart footer: {metrics['olist_footer']}",
-            "",
-        ]
-    )
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -216,9 +151,7 @@ def run_phase0(
             **test_metrics,
             **label_summary,
             "split_counts": split_counts,
-            # Count only eligible labelled orders, using the exact same boundary
-            # as assign_splits.  Counting raw orders included excluded statuses
-            # and made this value disagree with split_counts["immature"].
+            # Keep this report field on the same eligible-labelled boundary as the split summary.
             "immature_drop_count": split_counts["immature"],
             "calibration_checks": calibration_checks,
             "temporal_drift": _temporal_drift_diagnostics(mature, calibration_checks, params),

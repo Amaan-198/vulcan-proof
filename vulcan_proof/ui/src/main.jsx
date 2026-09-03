@@ -414,7 +414,7 @@ function LiveDemo() {
         <div className="demo-intro">
           <div className="demo-live-pill"><span />LIVE SIMULATION · VULCAN PROOF</div>
           <h1>Watch live how Vulcan Proof can make the difference in a {FEATURED_DEMO.amountRounded} dispute</h1>
-          <p>A customer buys an electronics order. Razorpay Vulcan correctly approves the payment. 62 days later, the customer files a {FEATURED_DEMO.disputeType} dispute — “I never received it.”</p>
+          <p>A customer buys an electronics order. Razorpay Gateway correctly approves the payment. 62 days later, the customer files a {FEATURED_DEMO.disputeType} dispute — “I never received it.”</p>
           <button className="demo-primary-button" onClick={startSimulation} type="button">Start simulation →</button>
           <div className="demo-metadata">Order {FEATURED_DEMO.orderId} · Electronics · {FEATURED_DEMO.merchantId}</div>
         </div>
@@ -503,7 +503,7 @@ function DemoField({ label, value, prominent = false }) {
 
 function DemoPaymentCard({ visible }) {
   return (
-    <DemoCard accent="green" label="02 / PAYMENT" title="Razorpay Vulcan" visible={visible} badge="✓ Payment approved" badgeTone="green">
+    <DemoCard accent="green" label="02 / PAYMENT" title="Razorpay Gateway" visible={visible} badge="✓ Payment approved" badgeTone="green">
       <div className="demo-risk-score"><span className="demo-score-check">✓</span><span className="demo-score-label">Fraud score</span><strong>{FEATURED_DEMO.fraudScore}</strong><small>LOW RISK</small></div>
       <div className="demo-note-box">No fraud signals detected. Payment processed normally.</div>
     </DemoCard>

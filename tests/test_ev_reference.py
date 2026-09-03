@@ -1,9 +1,8 @@
-"""Known-answer tests for the frozen EV oracle (vulcan_proof/ev_reference.py).
+"""Known-answer tests for the frozen EV oracle.
 
-These run in EVERY phase. They prove two things:
-  1. The oracle still reproduces the pre-build arithmetic (someone did not edit it).
-  2. params/params.yaml and the oracle agree on every shared constant (trap B19).
-Failure of (1): restore ev_reference.py from git. Failure of (2): fix params.yaml — NEVER the oracle.
+They protect the pre-build arithmetic and verify that the parameter contract agrees with the
+oracle. If a check fails, repair the parameter plumbing or implementation; never alter the oracle
+to make the result appear consistent.
 """
 import math, pathlib, sys
 import pytest, yaml
@@ -69,7 +68,7 @@ def test_empty_plan_ev_exactly_zero():
 
 
 def test_cash_on_compliance():
-    # cost term for a cash item must be cash × materialisation (compliance × presence), not raw cash
+    # A cash item is charged through materialization and compliance, not as an unconditional amount.
     _, _, cost = R.ev_set(("otp",), "Electronics", 45000)
     assert math.isclose(cost, 25 * R.COMPLIANCE_POP * 0.90)
 

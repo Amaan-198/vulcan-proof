@@ -46,7 +46,7 @@ def _set_leaf(data: dict[str, Any], path: str, value: Any) -> None:
 def apply_overrides(params: Params = P, overrides: Mapping[str, Any] | None = None) -> Params:
     """Return an isolated in-memory parameter copy with existing leaves overridden.
 
-    Phase-4 execution metadata uses double-underscore keys and is deliberately
+    Execution metadata uses double-underscore keys and is deliberately
     ignored here.  The two catalogue aliases are translated exactly as the
     phase specification describes them.
     """

@@ -1,4 +1,4 @@
-"""κ-grid evaluation, monotone κ* logic, and the leak guard."""
+"""Signal-grid evaluation and the no-signal leakage guard."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .driver import run_point
 
 
 def kappa_star(table: Iterable[Mapping[str, Any]], params: Params = P) -> dict[str, Any]:
-    """Find the first κ whose lower CI is positive and stays positive."""
+    """Find the first sustained positive lower-bound signal in the grid."""
     del params
     rows = [dict(row) for row in table]
     if not rows:
@@ -34,7 +34,7 @@ def kappa_star(table: Iterable[Mapping[str, Any]], params: Params = P) -> dict[s
 
 
 def find_kappa_star(table: Iterable[Mapping[str, Any]], params: Params = P) -> dict[str, Any]:
-    """Compatibility alias for :func:`kappa_star`."""
+    """Compatibility alias for the signal-grid boundary helper."""
     return kappa_star(table, params)
 
 
@@ -44,7 +44,7 @@ def kappa_zero_guard(
     params: Params = P,
     gain_ci_low: float | None = None,
 ) -> None:
-    """Reject a statistically supported κ=0 Arm-5 gain above the leak budget."""
+    """Reject a supported no-signal gain above the configured leak budget."""
     gain_value = float(gain)
     orchestration_value = float(orchestration)
     lower_bound = gain_value if gain_ci_low is None else float(gain_ci_low)
@@ -64,7 +64,7 @@ def run_kappa_sweep(
     parallel: bool = True,
     allow_dirty: bool = False,
 ) -> dict[str, Any]:
-    """Run the configured κ grid and persist ``kappa_star.json``."""
+    """Run the configured signal grid and persist its summary artifact."""
     values = tuple(float(value) for value in (params["sim.kappa.grid"] if kappas is None else kappas))
     if not values:
         raise InvariantError("κ sweep requires at least one grid value")

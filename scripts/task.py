@@ -4,8 +4,8 @@ Usage (inside the activated .venv):
     python scripts/task.py verify-env
     python scripts/task.py lint
     python scripts/task.py test               # always-on tests
-    python scripts/task.py check-phase 2      # phase done-criteria
-    python scripts/task.py lock               # regenerate requirements.lock (prints the exact pip commands)
+    python scripts/task.py check-phase <phase> # phase done-criteria
+    python scripts/task.py lock               # regenerate the lock (prints the pip commands)
 
 Every subcommand refuses to run unless sys.prefix is inside <repo>/.venv.
 """
@@ -77,8 +77,8 @@ def check_phase(n: str) -> None:
         p = f"tests/test_phase{k}.py"
         if (ROOT / p).exists():
             tests.append(p)
-    # Phase-specific tests can also appear in ``extra``.  Preserve order while
-    # avoiding duplicate collection (Phase 0 previously ran test_phase0 twice).
+    # Phase-specific tests can also appear in ``extra``. Preserve order while
+    # avoiding duplicate collection.
     tests = list(dict.fromkeys(tests))
     _run([sys.executable, "-m", "pytest", "-q", "--basetemp", str(ROOT / "outputs" / ".pytest_tmp"), *tests])
     _run([sys.executable, str(ROOT / "scripts" / "check_phase.py"), n])

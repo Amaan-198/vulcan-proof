@@ -1,4 +1,4 @@
-"""The four Phase-4 robustness worlds."""
+"""Robustness contexts for the sensitivity package."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def robustness_points(params: Params = P) -> tuple[tuple[str, dict[str, Any]], .
 
 
 def _carrier_fault_rate(summary: dict[str, Any], arm: str) -> float:
-    """Average defense-only carrier-fault win rate over the point's seeds."""
+    """Average defense-only carrier-fault outcome over a point's seeds."""
     values = []
     for diagnostics in summary["diagnostics"].values():
         values.append(float(diagnostics[arm]["defense_only_win_rate"]["carrier_fault"]))
@@ -43,7 +43,7 @@ def run_robustness_sweeps(
     parallel: bool = True,
     allow_dirty: bool = False,
 ) -> dict[str, Any]:
-    """Run and persist all four robustness points at canonical κ."""
+    """Run and persist the configured robustness points."""
     chosen_seeds = require_min_seeds(
         range(1, int(params["run.n_seeds_sweep"]) + 1) if seeds is None else seeds,
         params,

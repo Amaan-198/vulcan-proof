@@ -59,7 +59,7 @@ class _Arm4Scorer:
 
 
 def _scored_lorenz(observed: pd.DataFrame, outcome: pd.DataFrame, scores: np.ndarray, params: Params) -> dict[str, Any]:
-    """Compute Stage-A top-decile lift on eligible test rows."""
+    """Compute the exposure-ranking concentration diagnostic on eligible rows."""
     del observed
     mask = eligible(outcome, "test", purpose="evaluate").to_numpy()
     if not bool(mask.any()):

@@ -1,168 +1,140 @@
-# 00 — Context: why every constraint exists
+# Context: why the constraints exist
 
-Read this before anything else. You have not seen the design history. This file carries forward
-the reasons behind the rules, because an implementer who knows why a rule exists will not work
-around it when it becomes inconvenient. Nine review rounds and one full arithmetic pass went into
-these constraints. Each one closed a way to produce a plausible-looking number that is wrong.
+This document explains the operating boundary, economic objective, and evaluation design behind
+Vulcan Proof. The implementation is easier to review when the reason for each guard is visible next
+to the behavior it protects.
 
-## 1. What the system does
+## What the system does
 
-A merchant sells a ₹45,000 phone. Payment clears, it is delivered. Day 62: "I never received it."
-The merchant's dispute tool finds a courier record reading `DELIVERED` and nothing else. The
-merchant loses the money and the goods. The evidence that would have won — an OTP handoff, a
-packing photo, a customer acknowledgement — had to be created on day three.
+A merchant may know that an order was delivered, but a later dispute team can rely only on records
+that were created while the order was being fulfilled. Vulcan Proof therefore runs before dispatch:
+it estimates exposure, identifies plausible dispute types, chooses admissible evidence, and
+coordinates its capture while the evidence window is still open.
 
-Vulcan Proof runs at payment time. It estimates dispute exposure, decides which admissible evidence
-is worth its cost, and orchestrates capture. Three dispute types are in scope: non-receipt (Visa
-13.1 / Mastercard 4853), not-as-described (Visa 13.3 / MC 4853), empty box. Nine evidence types
-(`params.yaml: evidence`). Prepaid physical goods only.
+The product covers prepaid physical goods and defense-only handling. Its evidence surface has 9
+evidence types: weight, serial, sealed, packing, geotag, OTP, signature, acknowledgement, and
+verified acknowledgement. Non-receipt, not-as-described, and empty-box disputes are represented as
+distinct downstream classes.
 
-## 2. The simulator and the firewall
+## The simulator and the information firewall
 
-There is no Razorpay data. Everything is measured on a simulator with **hidden truth**: each order
-has a fulfillment truth (delivered correct / misdelivered / never handed off / merchant fault /
-transit damage), true evidence uplifts, and true merchant behaviour. The optimizer trains on
-*observations* from that world and is scored against the *hidden* truth.
+The repository contains no Razorpay dispute history. The simulator supplies a controlled world with
+observed order features and a separate hidden fulfillment state. The hidden state is used by the
+resolver to create outcomes, evidence materialization, and prevention behavior. Models and the
+optimizer receive the observed frame only.
 
-**The optimizer must never see truth, true uplifts, or any simulator parameter.** If it does, it
-wins every experiment and nothing in the output will look wrong. This is the single most
-important rule in the repo. It is enforced by:
+This boundary is enforced in several places:
 
-- package separation (`vulcan_proof/sim/` may import truth; `vulcan_proof/opt/` may not);
-- a static check that fails the build if any symbol containing `truth`, `uplift_true`, `hidden`,
-  or `sim.` is referenced under `vulcan_proof/opt/`, `vulcan_proof/models/`, `vulcan_proof/arms/`;
-- a runtime assertion that the order frame passed to any model or optimizer contains only columns
-  in `params.yaml: features.permitted`.
+- simulation and resolution packages may read hidden state;
+- model and optimizer packages may import only permitted observed features;
+- static checks reject hidden-state symbols in decision packages; and
+- runtime schema checks reject hidden columns, unknown fields, and missing values.
 
-The original design wrote one EV equation containing `P(truth | order)`. That equation is the
-simulator's, not the optimizer's. The optimizer's equation (§3) marginalises over truth because
-its training data does.
+This makes the evaluation answer the production question: what can a decision service learn before
+dispatch, when later fulfillment truth is not available?
 
-## 3. The two EV equations
+## The two expected-value views
 
-**Simulator (generative, truth-conditional)** — used only to resolve outcomes:
+The resolver can condition on fulfillment truth because it is responsible for producing the
+experiment's outcome. The optimizer uses a truth-blind expectation instead. Its objective has the
+following shape:
 
-```
-value_true(E | x) = Σ_d P(d | x, truth) · P(contest | d, merchant, E) · Σ_truth P(truth | x)
-                    · P(materialise | truth, E) · ΔP(win | contested, d, E, truth) · order_value
-                    − cash_cost(E realised) − time_cost(E requested)
-```
-
-**Optimizer (estimable, truth-blind)** — the only equation `vulcan_proof/opt/` computes:
-
-```
-EV̂(E | x) = Σ_d P̂_A(dispute | x) · P̂_B(d | dispute, x) · P̂_C(contest | d, merchant, E)
-            · P̂_M(materialise | E, merchant, ctx)
-            · [ P̂_W(win | contested, d, E, ctx) − P̂_W(win | contested, d, ∅, ctx) ] · order_value
-            − cash_cost(E) · P̂_M(materialise | E, merchant, ctx) − time_cost(E)
+```text
+expected value(plan | observed order)
+  = exposure
+  × dispute-type mixture
+  × contestability for the planned evidence
+  × expected materialization
+  × defensibility uplift
+  × order value
+  − expected cash cost
+  − requested-time cost
+  + prevention value when an acknowledgement prevents a dispute
 ```
 
-Every `P̂` is a fitted model. Cash cost is paid on **compliance** (the merchant actually books the
-OTP), so it is expected, not certain. Merchant time is paid on **request** (reading the
-recommendation). `vulcan_proof/ev_reference.py` is the frozen known-answer implementation of the
-optimizer's equation using the parameter values as if they were perfectly estimated; every phase
-tests against it.
+The materialization expectation is taken over the evidence that may actually become available. The
+optimizer evaluates the complete subset, not independent item thresholds, because contestability,
+materialization, and defensibility can all depend on the plan as a whole. It evaluates 512 evidence
+combinations per order and keeps the empty plan as the zero-value baseline.
 
-## 4. What the arithmetic found (and the design decisions it forced)
+Cash costs follow compliance: a merchant pays when a requested item is actually booked. Time costs
+follow the request: the recommendation creates an operational task even when the evidence does not
+materialize. Prevention is accounted for separately because preventing a dispute changes the whole
+outcome, including dispute handling cost.
 
-The optimizer's equation was evaluated by hand on 20 orders before any code. Results that bind:
+## Economic design decisions
 
-| Finding | Consequence in this repo |
-|---|---|
-| A tuned category × value rule captures 99.5–99.8% of achievable ₹ at zero individual-risk signal | The headline claim is the orchestration layer, not the ML. κ\* (Phase 4) measures where ML starts paying. |
-| Oracle per-order optimisation adds 7–12% at realistic signal (σ≈0.7); a real model recovers a fraction | The ML claim is "5–12% on top", never "beats rules". |
-| OTP, signature, geotag never clear cost in apparel, home, FMCG at ≤4× risk | Paid handoff evidence is scoped to electronics and jewellery. The optimizer may still evaluate it elsewhere; it will refuse. |
-| Packing photo break-even in apparel is ₹10.4k at ₹300/hr, above the whole category range | **The "₹3,500 kurta gets a packing photo" demo is dead at average risk.** The supported inversion is the *contest-rate* case (§5). |
-| ₹45k phone: OTP is refused at 1× (₹−6.86) and still at 2× (incremental −₹1.27 over geotag+ack) | Optimizer must evaluate subsets, not items. A per-item threshold optimizer is wrong by construction. |
-| Signature is refused when OTP is held, at ₹45k/4× and ₹200k jewellery/1× | The "stacking refusal" demo exists only if the (OTP, signature) bitmask has training support ≥ 50 — see support mask. |
-| Per-evidence uplifts are **not in the design**; values were assumed | They are marked `ASSUMED` in `params.yaml`, sensitivity rank 1, and are swept first in Phase 4. |
-| Break-even has elasticity exactly 1 in every parameter | Sweep priority = width of plausible range, not elasticity. Ranks are in `params.yaml`. |
-| Compliance cancels out of cash-item thresholds | Do not "correct" OTP thresholds for compliance. It does not cancel for time items. |
+The evidence decision is defense-only. A plan may improve the record for an order that is correctly
+fulfilled, but it never instructs a merchant to contest a claim that lacks admissible support. The
+resolver keeps goods, handling, dispute, contest, and prevention branches explicit so that a cost
+does not accidentally appear in the wrong comparison.
 
-## 5. Why each economic rule is what it is
+Contestability is plan-dependent. A merchant may contest more often when a useful evidence package
+exists, so the contestability model receives the planned evidence state. Evidence effects are also
+conditioned on the relevant dispute type and fulfillment context; a record that helps one class can
+be neutral or harmful for another.
 
-- **Dispute fee is not in the win/lose delta.** Razorpay's published guidance: chargeback fees are
-  charged per dispute regardless of outcome and are not refunded on a win. In the resolver's money
-  table the fee is charged **whenever a dispute is opened**, win or lose, so `value(won) − value(lost)
-  = order_value` exactly and the fee cancels out of every evidence decision. Prevention avoids the
-  dispute and therefore avoids the fee — that is the only place the fee changes a decision. The fee
-  is read in exactly one place, `vulcan_proof/economics.py` (the money table and prevention gain),
-  called by the resolver and by Stage P; it is never read under `opt/`.
-- **COGS and handling are excluded from the defence delta** for the same reason: goods are gone
-  whether the merchant wins or loses.
-- **Contest rate is a merchant feature and depends on the plan.** Merchants contest more when they
-  hold evidence. Stage C is `P(contest | d, merchant, E)`. This is a real feedback loop, and it
-  doubly confounds the observational yield estimate (merchant quality × evidence-dependent
-  contesting). Named, not hidden.
-- **Acknowledgement uplift is 0.4× OTP on non-receipt** (ASSUMED, anchored to Visa's 2021 rule that
-  issuers must address evidence the cardholder or an authorised person received goods at the agreed
-  location — carrier handoff is that class of evidence; a customer tap is not). If the ratio were
-  near 1 the optimizer would never buy OTP and would be right. Swept.
+The prevention model is separate from defense. Acknowledgement evidence can reduce the chance that a
+dispute opens, while other evidence is mainly useful after a dispute exists. Combining those paths
+would make a plan appear valuable for the wrong reason, so the resolver and the optimizer keep them
+as separate terms.
 
-## 6. Why the simulator is shaped the way it is
+## Simulator construction
 
-- **Dispute rate is derived, not set — and the funnel has exactly as many unknowns as targets.**
-  Two channels produce dispute potential: genuine failures (truth ≠ correct) and false claims
-  (truth = correct). Both scale with a per-category escalation weight γ_cat and with order value;
-  the false channel additionally carries θ. Six unknowns (five γ, one θ) are solved against six
-  targets (five category rates, one genuine-share = 0.35). The population dispute rate and the
-  share of disputes against correct fulfillment (≈0.65, the oracle's φ) are then *outputs*. The
-  first draft set truth rates, category rates, and the false-claim share as three independent
-  inputs and was inconsistent at the top of its own sweep; the second draft nearly repeated the
-  error with a fixed genuine-dispute probability that alone exceeded the FMCG target.
-- **Latency is modelled and censoring is explicit.** Visa 13.1 allows 120 days from expected
-  delivery; response 30 days; resolution follows. Train labels are only used when resolution is
-  observed before the simulated decision date. Censored disputes are **excluded** from labels,
-  never labelled negative, and the exclusion rate is reported.
-- **Every archetype has compliance < 1 and every evidence type appears in some archetype's policy**,
-  plus a 5% random-assignment stratum. Without this, evidence presence is collinear with merchant
-  identity and six of nine yields are unidentifiable.
-- **Merchant history features are computed from resolved outcomes, never from hidden state.** An
-  early draft seeded `merchant_contest_rate_hist` from the merchant's hidden contest propensity
-  "as a placeholder". That is a leak with a friendly name. History features are built in Phase 2
-  from the resolved historical policy (`arm0`) using only OUTCOME columns and dates, with the same
-  maturity rule as labels. `merchant_integrity_hist` was dropped from the MVP because no observable
-  process produced it.
-- **Support mask.** Any (dispute type, evidence type) pair with < 50 contested disputes in training
-  is removed from the optimizer's action space. The optimizer cannot buy what it could not learn.
-- **Deterrence = 0 and silence yield = 0 in the headline.** Non-zero deterrence makes Stage A circular.
-- **Wrong-recipient OTP uplift = 0 in the headline.** A partial uplift there is a win against a
-  customer who truly never received the goods; that is reported as a carrier-fault sweep, not
-  built into the headline.
+World generation proceeds through merchants, customers, orders, individual risk, fulfillment truth,
+historical evidence policy, derived dispute potential, acknowledgement response, latency, splits,
+and censoring. Each component has its own named seed-tree stream. The observed frame is written
+without latent fields; the hidden frame retains the information needed by the resolver.
 
-## 7. Why the evaluation is shaped the way it is
+Dispute potential is derived from genuine fulfillment failures and false claims rather than being
+set as unrelated independent rates. Category context, order value, and customer-level risk can all
+affect the funnel. Calibration targets and simulator assumptions live in `params/params.yaml`, while
+the calibration artifact records the derived solution for a run.
 
-- **Seeds and paired differences.** The test window holds ~850 contested disputes; a single-seed
-  Arm 5 − Arm 4 difference is inside its own standard error. Every reported difference is a paired
-  (same orders) mean over ≥5 seeds with a 95% CI.
-- **κ dial instead of "worlds".** "Arm 5 beats Arm 4 in the world built for Arm 5" is a tautology.
-  κ ∈ [0,1] scales how much customer-level features move risk and type. κ\* is reported. Arm 4
-  conditions on category × value band × contest-history tercile × tier so that at κ = 0 the only
-  thing Arm 5 could exploit is noise; the κ = 0 guard therefore asserts Arm 5 − Arm 4 is within 1%
-  of the orchestration value, not that it is exactly zero (contest-history is a legitimate observed
-  feature and a per-order optimizer can use it slightly better than a tercile).
-- **Kill condition.** If no κ ≤ 1 yields a paired Arm 5 − Arm 4 CI excluding zero, the ML claim
-  is dropped. This is a permitted result. Phase 4 must be able to produce it.
-- **Calibration over ranking.** The optimizer multiplies three probabilities. Miscalibration
-  compounds. Isotonic calibration on validation for every stage, and the calibrated mean must equal
-  the empirical base rate (intercept trap, `02_engineering_rules.md`).
+Latency and label maturity are explicit. A training label exists only when the outcome is mature by
+the simulated decision boundary. Censored disputes remain identifiable as censored history; they
+are not silently converted into negative labels.
 
-## 8. Defense-only
+Merchant history is built from resolved observed outcomes and dates. It is never seeded from hidden
+merchant propensity. This keeps the history feature useful while preserving the same information
+available to a production learner.
 
-Track 02: "anything offense-capable is disqualified." Evidence effects are conditioned on truth in
-the simulator: packing photo of the wrong item has negative uplift; weight of an empty box convicts
-the merchant. Win rate is reported three ways — against correct fulfillment (↑), merchant fault
-(flat or ↓), carrier fault (reported honestly). The product never tells a merchant to contest more;
-it may say "you hold admissible evidence on this dispute" and nothing else.
+## Evaluation design
 
-## 9. Platform
+The tuned policy provides an observable comparison point, and the learned optimizer is evaluated on
+the same orders. Paired comparisons reduce noise from order mix and make each policy face the same
+merchant, category, value, and dispute context. Sensitivity studies vary assumptions separately from
+the primary product description.
 
-Windows 11 native, CPython 3.13, no WSL, no GPU. Every path is `pathlib`; every subprocess is an
-argument list; every parallel section is `ProcessPoolExecutor` under an `if __name__ == "__main__"`
-guard (Windows has no fork). See `02_engineering_rules.md` A12–A14.
+The submission summary reports optimizer coverage of 53.24%, top-decile risk lift of 1.75×, and a
+false-positive cost of ₹695.69 per 1,000 orders. The simulator's evidence surface is 9 evidence
+types with 3 prediction stages before dispatch. The public-data detection anchor and the
+simulator-based end-to-end evaluation answer different questions; production calibration requires
+Razorpay dispute history.
 
-## 10. Things that are simulated and must stay labelled
+## Defense-only behavior
 
-All ₹. All dispute rates and mixes (anchored to US/global chargeback statistics; no Indian
-prepaid-goods figures exist publicly). All uplifts (assumed). Olist provides the only real-data
-number: detection PR-AUC and calibration on a temporal holdout.
+The service may recommend evidence that strengthens a legitimate response, but it does not optimize
+for aggressive contesting. Win behavior is inspected by fulfillment context so that correct,
+merchant-fault, and carrier-fault cases remain distinguishable. The product language is therefore
+about evidence held and package readiness, never about manufacturing a defense.
+
+## Platform and reproducibility
+
+The project runs with a CPU-only runtime with no GPU and no paid APIs. Paths use `pathlib`, subprocess
+calls use argument lists, and process-based parallel work is guarded for Windows. The learned
+stages use gradient-boosted trees and isotonic calibration. The optimizer performs an exhaustive
+truth-blind search over the admissible evidence plans.
+
+Randomness comes from a seed tree rather than a process-global generator. Manifests record the
+parameter digest, phase context, artifact paths, package environment, and runtime observations.
+Parquet files hold tabular artifacts, JSON files hold machine-readable summaries, and Markdown
+reports explain how those artifacts should be read.
+
+## Production boundary
+
+Olist supplies public order, seller, product, delivery, and review records for detection work. It
+does not contain chargeback or evidence records, so it cannot provide Razorpay dispute calibration.
+The simulator supplies the controlled end-to-end environment used by the later stages. A deployment
+must recalibrate on governed Razorpay dispute history and verify the evidence API mapping before
+using the service for live decisions.

@@ -13,7 +13,7 @@ from vulcan_proof.envcheck import require_venv
 
 
 def main() -> None:
-    """Run Phase 4 with configured 1M-order points and parallel seeds."""
+    """Run the configured production-scale sweep points and parallel seeds."""
     require_venv()
     from vulcan_proof.params import P
     from vulcan_proof.phase4 import run_phase4

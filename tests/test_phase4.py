@@ -56,7 +56,7 @@ def test_kappa_star_monotone_logic() -> None:
 
 
 def test_kappa_zero_guard_fires() -> None:
-    """The κ=0 guard rejects a gain larger than the configured leak budget."""
+    """The no-signal guard rejects a gain larger than the configured leak budget."""
     with pytest.raises(LeakError):
         kappa_zero_guard(1.0, 1.0, P)
     kappa_zero_guard(0.0, 1.0, P)
@@ -82,7 +82,7 @@ def test_lhs_reproducible() -> None:
 
 
 def test_rank_zero_disables_oat_and_lhs(tmp_path: Path) -> None:
-    """A zero max rank writes explicit empty artifacts without running points."""
+    """An empty maximum rank writes explicit empty artifacts without running points."""
     params = apply_overrides(P, {"sweep.oat_max_rank": 0, "sweep.lhs_max_rank": 0})
     seeds = range(1, int(params["report.min_seeds"]) + 1)
     oat = run_oat_sweep(params, tmp_path, seeds=seeds)

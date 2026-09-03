@@ -37,7 +37,7 @@ def _per_order_values(frame: pd.DataFrame, params: Params) -> tuple[float, float
 
 
 def _interval(values: np.ndarray, params: Params) -> tuple[float, float, float]:
-    """Return mean and a two-sided Student-t confidence interval."""
+    """Return the mean and its configured uncertainty bounds."""
     mean = float(values.mean())
     degrees = len(values) - 1
     standard_error = float(values.std(ddof=1) / np.sqrt(len(values)))

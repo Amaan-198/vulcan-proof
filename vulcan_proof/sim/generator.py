@@ -38,7 +38,7 @@ def _calibration_payload(
 
 
 def _nullable_int(values: np.ndarray) -> pd.Series:
-    """Represent -1 sentinels as pandas nullable Int32 values."""
+    """Represent missing integer-like values with pandas nullable integers."""
     result = pd.array(values, dtype="Int32")
     result[values < 0] = pd.NA
     return pd.Series(result)

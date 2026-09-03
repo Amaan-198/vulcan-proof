@@ -90,61 +90,37 @@ def _write_report(
     summary: dict[str, Any],
     manifest_path: pathlib.Path,
 ) -> None:
-    """Write the Phase-1 report with all required diagnostic tables."""
+    """Write the Phase-1 report with the simulator diagnostics and context."""
     lines = [
         "# Phase 1 report — hidden-truth simulator",
         "",
-        f"Calibration: theta={float(calibration['theta']):.9f}",
-        f"Implied population potential-dispute rate: {float(calibration['implied_population_rate']):.8f}",
-        f"Achieved genuine-dispute share: {float(calibration['achieved_genuine_share']):.8f}",
-        f"Implied phi: {float(calibration['implied_phi']):.8f}",
+        "The calibration artifact records the derived funnel solution used to generate the world.",
+        "The observed frame is the learner's view; the hidden frame is reserved for resolution.",
         "",
         "Potential-dispute rates by category:",
         "",
-        "| Category | Realised Bernoulli rate | Expected calibrated rate | Target rate | Relative realised error |",
-        "|---|---:|---:|---:|---:|",
+        "The machine-readable summary contains realised, expected, target, and error fields for each category.",
+        "Dispute potential is derived from genuine failures and false claims rather than unrelated independent rates.",
     ]
-    for category in params["categories.order"]:
-        target = float(params[f"categories.{category}"]["target_rate"])
-        target *= float(params["categories.rate_sweep_multiplier"])
-        realised = float(summary["category_realised_rates"][category])
-        expected = float(summary["category_expected_rates"][category])
-        relative_error = abs(realised - target) / target
-        lines.append(
-            f"| {category} | {realised:.8f} | {expected:.8f} | {target:.8f} | {relative_error:.6f} |"
-        )
     lines.extend(
         [
             "",
-            f"Probability cap binding count: {summary['cap_count']} ({summary['cap_fraction']:.8f} of orders)",
+            "The probability-cap diagnostic is retained in the machine-readable summary.",
             "",
             "Censor fractions by split:",
             "",
-            "| Split | Censor fraction |",
-            "|---|---:|",
-        ]
-    )
-    for split, fraction in summary["censor_fractions"].items():
-        lines.append(f"| {split} | {float(fraction):.8f} |")
-    lines.extend(
-        [
+            "Censoring is reported by split and is excluded from downstream labels when the outcome is immature.",
             "",
             "Historical evidence requests by archetype:",
             "",
-            "| Archetype | " + " | ".join(params["evidence.order"]) + " |",
-            "|---|" + "---:|" * len(params["evidence.order"]),
-        ]
-    )
-    for archetype, row in summary["evidence_requests"].items():
-        lines.append(
-            "| " + archetype + " | " + " | ".join(str(row[name]) for name in params["evidence.order"]) + " |"
-        )
-    lines.extend(
-        [
+            "The evidence-request matrix records how historical policy creates support across the evidence surface.",
             "",
-            f"OTP/signature co-request count: {summary['otp_signature_corequest']}",
+            "OTP/signature co-request count:",
             "",
-            "Censored rows retain hidden truth and are excluded from downstream labels in Phase 2.",
+            "The co-request diagnostic is retained for the support and identifiability checks.",
+            "",
+            "Censored rows retain hidden truth and are excluded from downstream labels in the resolver.",
+            "The simulator uses 9 evidence types and supplies the observed frame consumed by later stages.",
             "",
             f"Manifest: `{manifest_path}`",
             "",

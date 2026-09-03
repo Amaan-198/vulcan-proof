@@ -1,4 +1,4 @@
-"""Generate the eight-beat Phase-5 walkthrough from stored artefacts."""
+"""Generate the stored-artifact walkthrough for the product surface."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def _phase4_deferred(report: dict[str, Any]) -> bool:
 
 
 def _manifest_support(service: Any) -> int:
-    """Read the NR/signature support count from the selected Phase-3 manifest."""
+    """Read observed NR/signature support metadata from the selected manifest."""
     path = service.phase3_dir / "manifest.json"
     if not path.is_file():
         return 0
@@ -111,7 +111,7 @@ def build_demo_script(
     beat_one = _with_id(
         {
             "beat": BEAT_ONE,
-            "title": "Day 62 · a dispute arrives",
+            "title": "A dispute arrives during fulfillment review",
             "fallback_used": beat_one_fallback,
             "fallback_reason": "No lost Electronics non-receipt dispute was present in the selected test slice." if beat_one_fallback else None,
         },
@@ -121,7 +121,7 @@ def build_demo_script(
         beat_one["copy"] = (
             f"A stored test outcome opens a {str(outcome_one['dispute_type'])} dispute on a "
             f"{str(electronics_one.iloc[0]['category'])} order. "
-            f"The selected order value is {_money(electronics_one.iloc[0]['order_value'])}."
+            "The order context and its evidence state are available for inspection."
         )
     elif beat_one_id:
         beat_one["copy"] = "The selected test slice has no matching opened Electronics dispute."
@@ -156,9 +156,8 @@ def build_demo_script(
         average_id,
     )
     beat_two["copy"] = (
-        f"At exposure probability {float(average_plan.get('stages', {}).get('exposure_probability', 0.0)):.3f}, "
-        f"OTP is {'selected' if otp.get('selected') else 'not selected'}; its estimated standalone value is "
-        f"{_money(otp.get('standalone_ev'))}. Arm 4 is shown beside the stored Arm 5 plan for the same order."
+        f"The stored plan marks OTP as {'selected' if otp.get('selected') else 'not selected'}; "
+        "the tuned comparison plan is shown beside it for the same order."
         if average_id
         else beat_two["fallback_reason"]
     )
@@ -179,11 +178,10 @@ def build_demo_script(
         flagged_id,
     )
     if signature_fallback:
-        beat_three["copy"] = f"The optimizer did not learn an OTP–signature overlap in this world; support = {support_count}."
+        beat_three["copy"] = "The optimizer did not learn an OTP–signature overlap in this world; the observed support context is shown in the artifacts."
     else:
         beat_three["copy"] = (
-            f"The flagged order selects OTP. Signature is refused as a negative incremental addition "
-            f"({_money(signature.get('incremental_ev'))})."
+            "The flagged order selects OTP. Signature is refused as a negative incremental addition."
         )
 
     if electronics.empty:
@@ -199,7 +197,7 @@ def build_demo_script(
         "beat": BEAT_FOUR,
         "title": "Contest context · two merchants",
         "fallback_used": True,
-        "fallback_reason": "The canonical test slice did not contain the requested 0.4 / 0.8 contrast; nearest observed merchants are shown.",
+        "fallback_reason": "The canonical test slice did not contain the requested contest-history contrast; nearest observed merchants are shown.",
         "orders": [
             {
                 "order_id": order_id,
@@ -227,7 +225,7 @@ def build_demo_script(
     }
     if apparel.empty:
         threshold = params["reference.known_answers.apparel_packing_breakeven_x1"]
-        beat_five["copy"] = f"At this world's parameters no Apparel order clears; the packing break-even is {_money(threshold)}."
+        beat_five["copy"] = "At this world's parameters no Apparel order clears; the packing break-even remains in the stored reference artifact."
     else:
         apparel_id = str(apparel.iloc[0]["order_id"])
         beat_five["order_id"] = apparel_id

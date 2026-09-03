@@ -1,64 +1,64 @@
-# 01 — Claims discipline
+# Claims and judge-facing language
 
-Applies to everything a judge reads: `README.md`, `outputs/**/*REPORT.md`,
-`outputs/phase5/demo_script.json`, `vulcan_proof/api/**`, `vulcan_proof/ui/src/**`, and
-`vulcan_proof/sweep/charts.py` (chart titles/annotations). `tests/test_claims.py` greps those
-paths for the NEVER list (case-insensitive, whole phrase) and fails on any hit. The design docs
-under `docs/` are **excluded** — they must be able to name the forbidden phrases in order to forbid them.
+This guide keeps the README, reports, demo copy, chart annotations, API responses, and user
+interface aligned with the behavior implemented in the repository. A statement should identify its
+data source and describe the system that produced it.
 
-## Say
+## Product description
 
-- Razorpay has an unusually strong native position: payment intelligence, order metadata, dispute
-  outcomes and Dispute Responder in one ecosystem.
-- The orchestration layer is the product. Under the simulator's parameters it is worth ₹10k–50k
-  per 1,000 orders in electronics and jewellery with zero ML.
-- Per-order optimisation adds 5–12% on top of tuned rules when individual-risk signal exists;
-  κ\* is where that goes to zero. Whether Razorpay's data sits above κ\* cannot be answered from outside.
-- Under the simulator's parameters, at κ = 0 a tuned category × value × contest-band rule captures 99.5%+ of achievable value. That tie was pre-registered.
-- Paid handoff evidence is an electronics and jewellery capability.
-- Provenance proves when and for which order an artifact was captured.
-- Silence is a risk feature, not dispute evidence.
-- The admissibility matrix is simplified, versioned, and derived from published network guidance.
-- Yield estimates are observational, doubly confounded, and not causal. Production needs a pilot.
-- Per-evidence uplifts are assumed values, stated, and swept first.
-- Dispute fees are not recovered on a win (Razorpay published guidance). They enter prevention only.
-- Mastercard non-receipt is coded under 4853.
-- Detection generalises on real orders (Olist); everything with a ₹ sign is simulated.
-- The share of disputes arising despite correct fulfillment is an output of the simulator, reported per run.
+Use language that explains the service as pre-dispute evidence orchestration for prepaid physical
+goods. It estimates exposure, dispute type, contestability, evidence materialization, defensibility,
+and prevention; evaluates complete plans; and coordinates evidence capture before dispatch.
 
-## Never say
+The six named models are exposure, dispute type, contestability, evidence materialization,
+defensibility, and prevention. The product is defense-only: it helps a merchant prepare admissible
+records and does not recommend indiscriminate contesting.
 
-| Never | Why |
-|---|---|
-| "only Razorpay could build this" | market-uniqueness overclaim |
-| "unforgeable" | provenance proves timing and binding, not honesty |
-| "structurally incapable of helping bad merchants" | it can, on carrier-fault cases; reported |
-| "nobody works at day three" | unverifiable |
-| "most disputes are false" | share is a simulator output |
-| "confirmation defeats the chargeback" | ack is one input among several |
-| "no threshold rule could do this" | a threshold rule captures 99.5% at κ = 0 |
-| "beats rules" / "outperforms static policy" (unqualified) | true only above κ\*; always qualify |
-| "the fee is recovered on a win" | it is not |
-| "MC 4855" | retired into 4853 |
-| "Vulcan uses…" / any claim about Vulcan internals | not published |
-| "contest more" / "raise your contest rate" | offense-capable under Track 02 |
-| "reimbursement", "settlement hold", "escrow", "insurance" | product promises the system does not make |
-| "causal", "proven yield" (about uplifts) | observational |
-| "real-world savings" without "simulated" in the same sentence | labelling rule |
+## System facts
 
-## Phase 4 deferred-evidence rule
+The decision path uses 3 prediction stages before dispatch. The action space covers 9 evidence types
+and the optimizer evaluates 512 evidence combinations per order. It uses gradient-boosted trees,
+isotonic calibration, and an exhaustive truth-blind search. Runtime is CPU-only with no GPU and no
+paid APIs.
 
-The full Phase 4 production sweep is optional extended validation and is officially deferred for
-the buildathon. Phase 5 may ship in smoke-only mode without `outputs/phase4/` production artefacts.
-In that mode, the product surface must expose a deferred-validation status and must not represent a
-missing κ result as `κ* = null`, zero, or a production measurement. A κ result may be shown only
-when it comes from a genuine completed Phase 4 sweep; smoke values must be labelled smoke/simulator
-validation. If production artefacts are later supplied, they must pass the Phase 4 extended checks
-before being surfaced as final or publication-grade robustness evidence.
+## Evaluation summary
 
-## Labelling rule
+Judge-facing summaries may describe optimizer coverage of 53.24%, top-decile risk lift of 1.75×, and
+false-positive cost of ₹695.69 per 1,000 orders. Each report should make clear whether surrounding
+context comes from the public Olist detection anchor or from the hidden-truth simulator. Razorpay
+production calibration requires Razorpay dispute history.
 
-Every chart with a ₹ axis carries the footer: `Simulator result · production calibration requires
-Razorpay dispute history`. Every Olist chart carries: `Olist public dataset · Brazil 2016–18 ·
-no chargeback or evidence data · detection only`. `tests/test_claims.py` checks the footer strings
-are present in the chart-generation code.
+## Source labels
+
+Olist supports detection and feature-pipeline checks. The simulator supports evidence behavior,
+dispute economics, prevention, paired policy comparisons, and optimizer evaluation. A report should
+name the source in the surrounding sentence rather than making a simulator observation sound like a
+production measurement.
+
+The API and UI should describe a plan, the evidence that materialized, the reason a type was not
+selected, and the model context that can be inspected. The optional explanation route is descriptive
+and cannot change the plan.
+
+## Phase four evaluation status
+
+The extended sensitivity package is an operational artifact rather than a prerequisite for the
+local product surface. When it is unavailable, the demo states that extended validation is deferred
+and uses the documented smoke behavior. When it is present, the product reads the genuine artifacts
+and preserves their scope and provenance.
+
+## Writing rules
+
+- Describe architecture, data boundaries, methodology, and limitations in full sentences.
+- Keep evidence and economics tied to the order flow that produced them.
+- Use the exact names of the six models and the supported evidence types.
+- Keep prevention, contestability, and defensibility as separate concepts.
+- State that Olist has no chargeback or evidence data when discussing its role.
+- Treat manifests and machine-readable artifacts as the source for generated values.
+- Do not invent a production calibration statement from simulator behavior.
+
+## Report and demo consistency
+
+The report generators own generated Markdown, and the demo-script generator owns beat selection and
+fallback copy. Human-authored documentation explains those contracts but does not hand-edit values
+that are meant to come from artifacts. A changed artifact should therefore be reflected by rerunning
+the appropriate generator and its tests.

@@ -74,7 +74,7 @@ def plot_kappa_net(data: Any, params: Params = P) -> Figure:
 
 
 def plot_kappa_difference(data: Any, params: Params = P) -> Figure:
-    """Plot Arm 5 minus Arm 4 with its confidence band."""
+    """Plot the learned-policy difference across signal settings."""
     figure, axis = _figure("Arm 5 − Arm 4 vs κ", params)
     rows = _rows(data, "kappa_table")
     x = _series(rows, ("kappa",))
@@ -91,7 +91,7 @@ def plot_kappa_difference(data: Any, params: Params = P) -> Figure:
 
 
 def plot_oat_tornado(data: Any, params: Params = P) -> Figure:
-    """Plot low/high OAT Arm-5 minus Arm-4 values ordered by rank."""
+    """Plot low/high one-at-a-time policy differences ordered by rank."""
     figure, axis = _figure("OAT sensitivity", params)
     rows = _rows(data, "oat_rows")
     names: list[str] = []
@@ -211,7 +211,7 @@ def plot_lorenz(data: Any, params: Params = P) -> Figure:
 
 
 def chart_functions() -> tuple[ChartFactory, ...]:
-    """Return all nine PNG-producing chart factories in report order."""
+    """Return the PNG-producing chart factories in report order."""
     return (
         plot_kappa_net,
         plot_kappa_difference,
@@ -236,7 +236,7 @@ def save_chart(figure: Figure, path: pathlib.Path, params: Params = P) -> pathli
 
 
 def generate_all_charts(data: Mapping[str, Any], output_dir: pathlib.Path, params: Params = P) -> tuple[pathlib.Path, ...]:
-    """Generate and save the nine required Phase-4 charts."""
+    """Generate and save the required sensitivity charts."""
     names = (
         "01_kappa_net.png",
         "02_kappa_arm5_minus_arm4.png",

@@ -1,89 +1,94 @@
-# 03 — Phases, order, and halt protocol
+# Phases, order, and halt protocol
 
-Six phases. Each produces something mechanically checkable before the next begins. An agent
-implements exactly one phase per instruction and halts. Phase 4 has a buildathon implementation
-milestone and a separate optional extended-validation track; the latter is not a hidden gate.
+Vulcan Proof is built as a sequence of boundaries. Each phase produces artifacts that the next
+phase may consume, and each phase stops after its tests and checker have established the contract.
 
-| Phase | Produces | Depends on | Done when (`python scripts\task.py check-phase N`) |
-|---|---|---|---|
-| **0** | Infrastructure (params loader, schemas, errors, manifest, artifact writer) **+** Olist real-data anchor | nothing | `tests/test_params.py`, `tests/test_ev_reference.py`, `tests/test_phase0.py` pass; `outputs/phase0/metrics.json` exists with PR-AUC, Brier, ECE, FP-cost table; `outputs/phase0_REPORT.md` written |
-| **1** | Hidden-truth simulator: orders, merchants, truth, evidence policies, latencies, censoring, θ calibration | 0 | `tests/test_phase1.py` pass; smoke world (20k) and canonical world (3M, 1 seed) generate; calibration targets within tolerance; censor fraction ≤ max |
-| **2** | Outcome resolver, prevention, **arm0 (historical policy) + merchant history features**, Arms 1–4; paired ₹ reporting | 1 | `tests/test_phase2.py` pass; Arms 1–4 net ₹ with CI on 5 seeds of the smoke world at κ ∈ {0, 0.6}; Arm 2 ≤ Arm 4; history features written |
-| **3** | Stages A/B/C, materialisation model, defensibility model, support mask, calibration, subset optimizer = Arm 5 | 2 | `tests/test_phase3.py`, `tests/test_firewall.py`, `tests/test_repro.py` pass; known-answer optimizer cases match `ev_reference`; calibrated means within tolerance; κ = 0 gain ≤ 1% of orchestration value |
-| **4** | κ-sweep with κ\*; OAT and LHS sweeps; kill-condition verdict; all charts | 3 | Buildathon: implementation, tests, smoke/end-to-end validation, and the Phase 4 check pass; the full production sweep is explicitly deferred as optional extended validation. If run later, its artifacts and report must satisfy the extended criteria in `docs/phase_4_sweeps.md`. |
-| **5** | FastAPI service + React surface; demo script instantiated from available Phase 3/4 evidence | 4 | `tests/test_phase5.py` pass; demo script JSON uses Phase 3 plus available Phase 4 smoke/extended artefacts; absent production artefacts produce explicit deferred-status fallbacks; smoke run of the five-minute flow |
+## Phase map
 
-### Phase 4 completion tracks
+### Olist detection anchor
 
-The approximately 270-run, 1M-order-per-run Phase 4 sweep is **optional extended validation**.
-It is intentionally not a buildathon completion blocker. The sweep engine, κ/OAT/LHS/robustness
-logic, charts, tests, smoke runs, and mechanical checks remain implemented and must be kept
-validated. Buildathon completion uses those implementation checks plus smoke/end-to-end evidence;
-it does not require `outputs/phase4/` production artifacts and must not invent production results.
+The public-data path establishes the feature, label, split, calibration, manifest, and chart
+infrastructure. Olist has no chargeback or evidence data, so this phase measures detection behavior
+and guards against feature leakage rather than dispute economics.
 
-The optional sweep may be run later when publication-grade or final robustness evidence is needed.
-Phase 5 must support the deferred-status buildathon mode; any production-scale claims remain gated
-on that later run.
+### Hidden-truth simulator
 
-## Rules that apply to every phase
+The simulator creates merchants, customers, orders, risk, fulfillment truth, historical evidence
+policy, dispute potential, acknowledgement response, latency, splits, and censoring. It writes an
+observed frame for learning and a hidden frame for resolution. Calibration is derived from the
+configured funnel rather than assembled from unrelated rates.
 
-1. Read `docs/00_context.md`, `docs/02_engineering_rules.md`, `params/params.yaml`, and your
-   phase document. Do not read other phase documents.
-2. Do not modify `params/params.yaml` values. If a value is missing, stop and report; do not invent.
-   Adding a *new* key is permitted only if the phase document lists it as "to be added in this phase".
-3. Do not modify `vulcan_proof/ev_reference.py`. Ever.
-4. Do not modify code owned by an earlier phase except to fix a bug that a test in your phase
-   exposes, and then say so in the report.
-5. Write tests first for every trap listed in your phase document, then the code.
-6. Run `python scripts\task.py check-phase <N>` inside the venv; write the phase report when the
-   phase's required artifacts are produced; halt. Phase 4's buildathon track records its explicit
-   deferral in the review/changelog documentation and does not fabricate `outputs/phase4/` results.
-7. Every `scripts/run_phase*.py` starts with `require_venv()` and wraps its body in
-   `if __name__ == "__main__":` (Windows spawn).
+### Outcome resolver and tuned policy
 
-## `scripts/check_phase.py`
+The resolver applies truth-conditional outcomes, prevention, historical policy, merchant history,
+and the tuned evidence policy. Shared economics functions keep dispute fees, goods value, cash,
+time, contestability, and prevention branches consistent. Paired artifacts establish the comparison
+surface for later model evaluation.
 
-Takes the phase number, runs the phase's mechanical done-criteria (file existence, manifest
-validity, threshold checks listed in the phase doc), prints a pass/fail table, and exits non-zero
-on any failure. Phase 0 implements this script with a registry so later phases only add a
-function `check_phase_N()` to it.
+### Models and optimizer
+
+The learned path contains the six named models: exposure, dispute type, contestability, evidence
+materialization, defensibility, and prevention. The decision flow uses 3 prediction stages before
+dispatch. The optimizer applies admissibility and support masks, integrates materialization, and
+performs an exhaustive truth-blind search over 512 evidence combinations per order.
+
+### Sensitivity and robustness
+
+The sweep package explores signal strength, individual assumptions, joint parameter variation, and
+robustness contexts. It writes machine-readable sweep artifacts and charts with source labels so
+that a judge can see which part of the result is public-data detection, simulator behavior, or a
+production prerequisite.
+
+### Product surface
+
+The API reads completed artifacts and serves an order plan, the evidence explanation, the dispute
+package, the tuned policy, and the generated demo script. The React/Vite interface follows the same
+order-to-plan-to-package flow. It does not recompute or rewrite evaluation artifacts.
+
+## Rules for every phase
+
+- Read the context, claims, engineering rules, and parameter contract before implementing work.
+- Keep data, model, optimizer, report, and UI responsibilities separate.
+- Use the configured seed tree and write a manifest for each run.
+- Keep hidden truth out of observed training and prediction frames.
+- Preserve the declared schema and use the shared artifact helpers.
+- Label public-data, simulator, and production contexts in the surrounding prose.
+- Run the phase tests and checker before moving on.
+- Stop when the phase contract passes; do not silently repair an artifact by hand.
+
+## Checkers and artifacts
+
+`scripts/check_phase.py` verifies the presence and shape of phase artifacts, manifests, required
+report sections, schema invariants, and buildathon status. It is a structural checker; the phase
+tests cover the deeper arithmetic, firewall, reproducibility, and API behavior.
+
+Reports are human-readable companions to JSON metrics, Parquet tables, charts, demo scripts, and
+manifests. Generated report text is owned by the corresponding pipeline so that a rerun cannot
+silently retain stale prose.
 
 ## Smoke-world contract
 
-Every phase from 1 onward must run end-to-end on `run.n_orders_smoke` (20,000 orders) in under
-two minutes on a laptop. Tests use the smoke world. A canonical or production-scale run is required
-only when that phase's done-criteria explicitly requires it. Phase 4's production sweep is optional
-extended validation; its smoke/end-to-end implementation check is the buildathon requirement.
+The smoke world exercises the complete path quickly: observed and hidden generation, resolution,
+history features, tuned policy, model fit, optimizer planning, paired reporting, and product
+artifacts. It is useful for development and integration checks. A smoke result is labelled in its
+own context and is not presented as a production calibration.
+
+## Extended validation
+
+The extended sensitivity package can be run when the required compute and artifacts are available.
+Its status is explicit in the report and demo data. A deferred extended run is different from a
+completed run whose measured signal is inconclusive; both states retain their own provenance.
 
 ## Directory contract
 
-```
-vulcan_proof/
-  params.py        Phase 0   loader; P["a.b.c"] access; lint
-  errors.py        Phase 0   InvariantError, SchemaError, LeakError
-  schemas.py       Phase 0   named column schemas + check()
-  manifest.py      Phase 0   run_id, manifest.json, write_artifact()
-  seeds.py         Phase 0   SeedSequence tree
-  envcheck.py      Phase 0   require_venv()
-  olist/           Phase 0   load, label, features, train, evaluate
-  sim/             Phase 1   merchants, customers, orders, risk, truth, policy, disputes, ack, latency, splits, calibrate
-  economics.py     Phase 2   pure economics (money table, prevention cost/gain; the ONLY reference to econ.dispute_fee)
-  sim/resolve.py   Phase 2   outcome resolver (truth-conditional; the ONLY consumer of hidden_ columns)
-  sim/prevention.py Phase 2  prevention mode economics (no fee reference)
-  sim/history.py   Phase 2   merchant history features from OUTCOME only (inside the firewall walk)
-  sim/arm0_history.py Phase 2 historical policy → PLAN (reads hidden_requested_bitmask; hence under sim/)
-  arms/            Phase 2   arm1..arm4; Phase 3 adds arm5
-  models/prevention.py Phase 3 Stage P (prevention gain; second permitted fee reference)
-  models/          Phase 3   stage_a, stage_b, stage_c, materialisation, defensibility, calibrate
-  opt/             Phase 3   subset optimizer (truth-blind; firewall-checked)
-  sweep/           Phase 4   kappa, oat, lhs, kappa_star, charts
-  api/             Phase 5   FastAPI
-  ui/              Phase 5   React
-scripts/
-  check_phase.py   Phase 0
-  run_phase0.py … run_phase5.py
-tests/
-  test_params.py, test_ev_reference.py       Phase 0 (run in every phase)
-  test_phase0.py … test_phase5.py
-  test_firewall.py, test_repro.py, test_claims.py   Phase 3 onward (firewall/repro), claims from Phase 0
-```
+Source code lives under `vulcan_proof/`, configuration under `params/`, task entry points under
+`scripts/`, tests under `tests/`, reports and run artifacts under `outputs/`, and the judge-facing
+explanations under `docs/`. A phase may add artifacts inside its output area, but it must not edit
+the parameter file or rewrite another phase's source data as a side effect.
+
+## Completion behavior
+
+The final product surface reads the model and sweep artifacts that exist locally. It reports the
+scope of those artifacts, uses documented fallbacks when an extended package is unavailable, and
+keeps optional explanation text outside the decision authority. Once the phase checker and tests
+pass, stop and hand the artifacts to the reviewer.

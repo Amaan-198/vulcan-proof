@@ -1,124 +1,209 @@
-# Vulcan Proof — Pre-Dispute Evidence Orchestration for Razorpay
+# Vulcan Proof — Pre-dispute evidence orchestration for Razorpay
 
-**Razorpay AI Buildathon · Track 02: AI Risk Manager · solo build · Windows 11 native**
+Vulcan Proof is a decision service for prepaid physical-goods orders. It estimates the kinds of
+dispute exposure an order presents, chooses evidence that is admissible and economically useful,
+and coordinates collection before the relevant fulfillment window closes. The result is a
+defense-only evidence plan that can be inspected by a merchant, consumed by Dispute Responder,
+and traced back to the order context and model outputs that produced it.
 
-> Dispute Responder can only fight with evidence that exists. Vulcan Proof makes sure the right
-> evidence exists before it becomes impossible to collect.
+The system is designed around a simple operational fact: a dispute team can use only evidence that
+already exists. A delivery record, packing record, acknowledgement, or handoff artifact has to be
+created while the order is still actionable. Vulcan Proof therefore makes the evidence decision at
+payment time and keeps the later dispute package deterministic.
 
-## The honest claim
+## What the system does
 
-Vulcan Proof predicts which fulfillment disputes a prepaid physical-goods order is exposed to,
-decides which admissible evidence is economically worth collecting, and orchestrates its capture
-before the physical window closes.
+For each order, the service:
 
-Pre-build arithmetic (`docs/00_context.md` §4) established, before any code was written:
+- reads permitted pre-dispatch and order-context features;
+- estimates exposure, dispute type, contestability, evidence materialization, defensibility, and
+  prevention signals;
+- filters evidence by dispute admissibility, merchant availability, opt-in, and learned support;
+- evaluates the complete evidence plan rather than making independent per-item decisions;
+- returns the best plan, its expected value, standalone and incremental evidence values, and clear
+  refusal reasons; and
+- assembles materialized evidence into API slots when a dispute package is requested.
 
-1. **The orchestration layer is the product.** Recommending free pre-dispatch evidence and a ₹0.30
-   acknowledgement is worth ₹10k–50k per 1,000 orders in electronics and jewellery under the
-   simulator's parameters, with zero ML.
-2. **The ML is a 5–12% improvement on that**, and only when individual-risk signal exists. At zero
-   signal (κ = 0) a tuned category × value × contest-band rule captures 99.5%+ of achievable value.
-3. **κ\*** — the minimum signal strength at which per-order optimisation beats the tuned rule with a
-   confidence interval excluding zero — is the number this repo exists to measure. If κ\* does not
-   exist in [0, 1], the ML claim is dropped and the orchestration layer ships alone.
-4. **Paid handoff evidence (OTP, signature, geotag) is an electronics-and-jewellery capability.**
+These six models do not operate independently; one optimizer combines their outputs into a single evidence plan for each order.
 
-## What is proven vs simulated
+The working evidence surface has 9 evidence types. The optimizer evaluates 512 evidence
+combinations per order, and the decision path uses 3 prediction stages before dispatch. The
+evidence types are weight, serial, sealed, packing, geotag, OTP, signature, acknowledgement, and
+verified acknowledgement.
 
-| Component | Status | Where |
-|---|---|---|
-| Detection generalises to real orders | **Measured** on the public Olist dataset, temporal holdout | Phase 0 |
-| Dispute economics, evidence yields, optimizer value, κ\* | **Simulated** in a hidden-truth world the optimizer cannot see | Phases 1–4 |
-| Production calibration | **Requires Razorpay dispute history** — not available | — |
+The current submission summary is:
 
-Every ₹ figure is a simulator result and is labelled as such.
+- optimizer coverage: 53.24%;
+- top-decile risk lift: 1.75×; and
+- false-positive cost: ₹695.69 per 1,000 orders.
 
-## Environment — Python 3.13, Windows 11, no WSL, no GPU
+These figures describe the evaluation artifacts; the public Olist data supplies a detection anchor,
+while the end-to-end economics and evidence behavior come from the hidden-truth simulator.
+Production calibration requires Razorpay dispute history.
 
-The stack runs natively on 64-bit Windows under CPython **3.13**. Every dependency in
-`requirements.lock` was resolved by `pip download --only-binary=:all: --platform win_amd64
---python-version 3.13` against PyPI on 2026-08-26 and is pinned by SHA-256. LightGBM's wheel is
-`py3-none-win_amd64`; nothing builds from source; nothing touches CUDA. The RTX 5070 Ti is unused
-by design — the workload is LightGBM on tabular data and stays on CPU.
+## Per-order decision flow
 
-**Install (paste into PowerShell from the repo root):**
+### Intake and exposure
+
+The API accepts an observed order frame that has passed the schema gate. Features include order
+context, merchant history derived from resolved outcomes, category and value bands, network and
+issuer context, fulfillment signals available before dispatch, and the permitted evidence state.
+Post-payment outcomes and simulator-only truth columns are rejected. Stage A estimates exposure,
+the probability that the order will enter the dispute funnel.
+
+### Dispute type
+
+Stage B converts exposure into a calibrated distribution over the supported dispute classes:
+non-receipt, not-as-described, and empty-box disputes. The distribution is used downstream instead
+of selecting one class early, so a plan can be valuable across several plausible dispute paths.
+
+### Contestability and evidence materialization
+
+Stage C estimates the probability that the merchant will contest a dispute given the planned
+evidence. This dependency matters because evidence can change behavior as well as the eventual
+defense record. The materialization model estimates which requested evidence will actually become
+available, including merchant compliance and acknowledgement response behavior.
+
+The defensibility model estimates the win probability for a dispute type and materialized evidence
+set. Low-support combinations use a conservative main-effect fallback, and unsupported
+dispute/evidence pairs are removed from the action space. The prevention model separately estimates
+the value of an acknowledgement that prevents a dispute before it opens.
+
+### Exhaustive plan selection
+
+For each admissible plan, the optimizer combines the Stage A exposure, Stage B dispute mix, Stage C
+contestability, materialization expectation, defensibility uplift, prevention value, cash cost, and
+merchant time. It enumerates materialization patterns inside each candidate plan and selects the
+highest-value complete subset. The empty plan has zero expected value, so evidence is requested
+only when the full plan remains positive after its costs and dependencies.
+
+This search is exhaustive and truth-blind. It learns from observed orders and resolved outcomes;
+the simulator's hidden fulfillment truth and assumed evidence uplifts are available only to the
+resolver and evaluation harness. This boundary prevents the optimizer from choosing a plan using
+information that will not exist in production.
+
+### Fulfillment and dispute package
+
+The selected plan is written with per-type expected value, incremental value, availability, support,
+and refusal reason codes. Downstream capture systems can request the plan's evidence while the
+order is actionable. If a dispute opens, the package endpoint maps the evidence that materialized
+to the corresponding Razorpay contest-API slots. The plan endpoint also exposes the three-stage
+predictions and the tuned comparison plan used by the evaluation arms.
+
+## Architecture
+
+The repository separates public-data detection, simulation, outcome resolution, model training,
+optimization, reporting, and product serving:
+
+| Area | Responsibility |
+|---|---|
+| `vulcan_proof/olist/` | Load the public Olist tables, build leakage-safe features and labels, and train the detection anchor. |
+| `vulcan_proof/sim/` | Generate observed and hidden order worlds, including fulfillment truth, latency, evidence behavior, and censoring. |
+| `vulcan_proof/economics.py` | Keep the money table, prevention gain, evidence costs, and resolver economics in pure shared functions. |
+| `vulcan_proof/models/` | Fit the exposure, dispute type, contestability, materialization, defensibility, and prevention models from observed training data. |
+| `vulcan_proof/opt/` | Apply schema gates, support masks, materialization expectation, and exhaustive truth-blind plan selection. |
+| `vulcan_proof/arms/` | Run the tuned evidence policy and the learned optimizer for paired evaluation. |
+| `vulcan_proof/sweep/` | Run signal, one-at-a-time, joint, and robustness sensitivity studies and build charts. |
+| `vulcan_proof/api/` | Serve order plans, dispute packages, policy details, and the generated demo script through FastAPI. |
+| `vulcan_proof/ui/` | Provide the React/Vite order, plan, and dispute-package views. |
+| `outputs/` | Store manifests, model metrics, plans, reports, charts, and demo artifacts produced by runs. |
+
+The project is organized as a sequence of phases. The Olist anchor establishes the real-data
+detection boundary. The simulator creates a controlled observed/hidden world. The resolver builds
+the outcome and history features used by the tuned policy. Model training and optimization then
+operate only on observed columns, and the final product surface reads the resulting artifacts.
+
+## Data boundary and evaluation design
+
+Olist is a public Brazilian commerce dataset with order, seller, product, delivery, and review
+records. It has no chargeback or evidence data, so it is used for detection behavior and leakage
+checks, not for dispute economics or evidence-yield claims. Razorpay-specific production
+calibration is a deployment requirement because the repository does not contain Razorpay dispute
+history.
+
+The simulator maintains two related views. The observed frame contains the features and outcomes a
+production learner may use. The hidden frame contains fulfillment truth and the latent effects
+needed to resolve the experiment. The resolver may read both views; model fitting and optimization
+receive only the permitted observed schema. Historical labels obey the same maturity and censoring
+boundary that would apply to a live dispute workflow.
+
+Evaluation uses paired orders across the tuned policy and optimizer so that the comparison reflects
+the same order context. Sensitivity runs vary simulator assumptions and record their scope in
+manifests and reports. Reports distinguish the public-data detection anchor, simulator behavior,
+and production prerequisites in plain language.
+
+## Technology and runtime
+
+The core stack is Python with pandas and NumPy for tabular data, LightGBM gradient-boosted trees
+for the learned stages, and isotonic calibration for probability outputs. FastAPI exposes the
+service, while React and Vite provide the local demonstration interface. Parquet artifacts keep
+large intermediate frames separate from the source code, and JSON manifests make each run
+reproducible and inspectable.
+
+The runtime is CPU-only with no GPU and no paid APIs. The optional explanation route is disabled by
+default and can render a sentence from an existing plan; it has no authority over the decision.
+All decision-making remains in the local model and optimizer path.
+
+## Install and run
+
+From the repository root in PowerShell:
 
 ```powershell
-py -3.13 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade "pip==25.2"
-python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
-python scripts\task.py verify-env
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --require-hashes --only-binary=:all: -r requirements.lock
+.\.venv\Scripts\python.exe scripts\task.py verify-env
 ```
 
-`verify-env` asserts: interpreter is 3.13.x, `sys.prefix` is inside `.venv`, every locked package
-imports at its locked version, LightGBM trains a 100-row model, and `pytest tests\test_ev_reference.py`
-passes. If any step fails, the install is wrong; nothing in this repo runs against the system Python
-and every script refuses to start outside a venv (`vulcan_proof/envcheck.py`).
+The environment check confirms that the interpreter is inside the project environment, locked
+packages import correctly, the gradient-boosted-tree dependency can train, and the frozen EV
+reference tests pass. The lock file is the installation source; use the task runner when it needs
+to be regenerated.
 
-If PowerShell blocks activation: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
-`requirements.in` lists the 14 direct dependencies; `requirements.lock` is the only file pip reads.
-Do not edit the lock by hand; regenerate it with `python scripts\task.py lock` (documented there) and
-commit the diff.
-
-**Memory.** The 3M-order canonical run peaks at roughly 5–6 GB RSS (observed frame ≈ 250 MB with
-declared dtypes, hidden ≈ 180 MB, one OUTCOME frame ≈ 150 MB per arm, LightGBM binned dataset
-≈ 600 MB, optimizer EV matrix chunked at 100k orders × 512 subsets × 8 B ≈ 400 MB per chunk). Every
-manifest records `peak_rss_mb` via `psutil`; `check-phase` fails if it exceeds `run.max_peak_rss_gb`
-(16 GB) so a memory regression is caught, not paged.
-
-## Repository layout
-
-```
-README.md                        this file
-docs/00_context.md               WHY each constraint exists — read first, always
-docs/01_claims.md                say / never-say, machine-checked
-docs/02_engineering_rules.md     non-negotiable coding rules, traps, and the guard for each
-docs/03_phases.md                phase order, halt protocol, done-criteria index
-docs/phase_0_olist.md            infrastructure + real-data detection anchor
-docs/phase_1_simulator.md        hidden-truth world generator
-docs/phase_2_arms.md             resolver, prevention, history features, Arms 0–4
-docs/phase_3_models_optimizer.md Stages A/B/C, defensibility, optimizer (Arm 5)
-docs/phase_4_sweeps.md           κ-sweep, κ*, OAT, LHS, kill condition
-docs/phase_5_demo.md             product surface, scripted from Phase 4 output
-docs/appendix_arithmetic.md      pre-build arithmetic (provenance of known answers)
-params/params.yaml               EVERY constant: value, unit, source, sweep range, sensitivity rank
-requirements.in / requirements.lock
-scripts/task.py                  cross-platform task runner (replaces make)
-vulcan_proof/ev_reference.py     frozen known-answer oracle
-tests/test_ev_reference.py       known-answer tests (pass now)
-```
-
-## Phase 5 demo
-
-Install the UI dependencies once from the repository root, then use one command to run both the
-Vite frontend and FastAPI backend:
+To build and run the local product surface:
 
 ```powershell
 npm ci --prefix vulcan_proof/ui
 npm run dev:all
 ```
 
-Open `http://localhost:5173`. `dev:all` generates the Phase 5 demo artefacts when they are missing,
-starts Vite on port 5173, and starts FastAPI on port 8765 with the Vite API proxy. The demo is
-laptop-first. The generated walkthrough records whether the Phase 4 production-scale validation is
-available; the current buildathon artefacts are smoke-only. The optional `/explain` route is disabled
-unless `VP_EXPLAIN_LLM=1`; it cannot change a plan.
+The browser opens the order view first. From there a judge can inspect a plan, compare evidence
+types and refusal reasons, and open the dispute package for an order with materialized evidence.
+The API also exposes the generated demo script and the tuned policy table. Phase reports remain
+file-based artifacts rather than a separate validation screen in the UI.
 
-## How to work in this repo
+Useful task-runner commands are `verify-env`, `test`, `lock`, and `check-phase`. Each phase runner
+writes its own manifest and report under `outputs/`; the report is a human-readable companion to
+the machine-readable metrics and parquet artifacts.
 
-Point a coding agent at the repo and say: **"Read `docs/00_context.md`, `docs/02_engineering_rules.md`,
-`params/params.yaml`, and `docs/phase_N_*.md`. Implement Phase N. Stop when its done-criteria pass."**
-The agent completes the phase, runs `python scripts\task.py check-phase N`, writes
-`outputs\phaseN_REPORT.md`, and **halts**.
+## Repository guide
 
-## Reproducibility contract
+- `docs/00_context.md` explains the information boundary, economics, and design rationale.
+- `docs/01_claims.md` defines the language used by judge-facing surfaces.
+- `docs/02_engineering_rules.md` records the invariants and the guard attached to each trap.
+- `docs/03_phases.md` describes phase order, smoke contracts, and halt behavior.
+- `docs/phase_0_olist.md` through `docs/phase_5_demo.md` describe implementation responsibilities.
+- `docs/appendix_arithmetic.md` records the EV derivation and how the optimizer's objective is
+  assembled.
+- `params/params.yaml` is the source of runtime constants and sweep configuration.
+- `scripts/` contains cross-platform runners and environment checks.
+- `tests/` contains invariant, schema, firewall, reproducibility, and phase tests.
 
-- One master seed (`run.master_seed = 20260826`). Every random stream is spawned from it via
-  `numpy.random.SeedSequence`; no module calls `np.random.seed` or the global RNG.
-- Every run writes `outputs/<run_id>/manifest.json`: git commit, `params.yaml` SHA-256, master seed,
-  phase, timestamp, wall seconds, peak RSS, installed package versions. Two runs with equal
-  manifests (minus timestamp/wall/rss) produce byte-identical parquet outputs.
-- No parameter exists outside `params/params.yaml`.
+## Reproducibility and safety
 
-No LLM in any decision path. An optional explanation sentence in Phase 5 is off by default.
+Every random stream is derived from the run seed through the seed tree; modules do not use a
+process-global random state. Manifests record the parameter digest, phase, seed context, artifact
+paths, runtime details, and installed package information. The schema gate rejects hidden columns,
+unknown features, and missing values before model fit or prediction.
+
+The truth firewall is enforced both statically and at runtime. Simulation and resolution may use
+hidden state to create outcomes, but model and optimizer packages cannot import it. This keeps the
+decision service representative of the information available before dispatch.
+
+## Scope and limitations
+
+The supported workflow is prepaid physical goods and defense-only dispute handling. The simulator
+is an evaluation instrument, not a substitute for Razorpay production calibration. Evidence
+availability depends on merchant process and capture integrations, and the optional explanation
+surface is descriptive rather than a source of decisions. A deployment should recalibrate the
+models on governed Razorpay dispute history, verify evidence API mappings, and retain the same
+pre-dispatch information boundary.

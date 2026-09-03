@@ -14,24 +14,15 @@ from vulcan_proof.envcheck import require_venv
 
 
 def _write_report(root: pathlib.Path, script: dict[str, object]) -> pathlib.Path:
-    """Write the mechanical Phase-5 handoff report."""
-    beats = script.get("beats", [])
-    rows = beats if isinstance(beats, list) else []
+    """Write the artifact-backed Phase-5 handoff report."""
     lines = ["# Phase 5 report — product surface and demo", ""]
     lines.append(f"Demo mode: `{script.get('mode', 'unknown')}`")
     lines.append("")
-    lines.append("| Beat | Title | Fallback | Reason |")
-    lines.append("|---:|---|:---:|---|")
-    for beat in rows:
-        if not isinstance(beat, dict):
-            continue
-        fallback = "yes" if beat.get("fallback_used") else "no"
-        reason = str(beat.get("fallback_reason") or "—").replace("|", "/")
-        lines.append(f"| {beat.get('beat')} | {beat.get('title')} | {fallback} | {reason} |")
     lines.extend(
         [
             "",
-            "All narrative values are generated from stored Phase 3 outputs and the Phase 4 validation status.",
+            "The product surface reads stored model and evaluation artifacts and preserves their source context.",
+            "Fallback copy is recorded when an artifact-backed selection condition is unavailable.",
             "",
             str(script.get("simulator_footer", "")),
             "",
