@@ -3,8 +3,9 @@
 Vulcan Proof is a decision service for prepaid physical-goods orders. It estimates the kinds of
 dispute exposure an order presents, chooses evidence that is admissible and economically useful,
 and coordinates collection before the relevant fulfillment window closes. The result is a
-defense-only evidence plan that can be inspected by a merchant, consumed by Dispute Responder,
-and traced back to the order context and model outputs that produced it.
+defense-only evidence plan that can be inspected by a merchant, is designed to plug into a tool
+like Dispute Responder, and can be traced back to the order context and model outputs that
+produced it.
 
 The system is designed around a simple operational fact: a dispute team can use only evidence that
 already exists. A delivery record, packing record, acknowledgement, or handoff artifact has to be
@@ -24,7 +25,8 @@ For each order, the service:
   refusal reasons; and
 - assembles materialized evidence into API slots when a dispute package is requested.
 
-These six models do not operate independently; one optimizer combines their outputs into a single evidence plan for each order.
+These six models do not operate independently; one optimizer combines their outputs into a single
+evidence plan for each order.
 
 The working evidence surface has 9 evidence types. The optimizer evaluates 512 evidence
 combinations per order, and the decision path uses 3 prediction stages before dispatch. The
@@ -96,7 +98,7 @@ The repository separates public-data detection, simulation, outcome resolution, 
 optimization, reporting, and product serving:
 
 | Area | Responsibility |
-|---|---|
+| --- | --- |
 | `vulcan_proof/olist/` | Load the public Olist tables, build leakage-safe features and labels, and train the detection anchor. |
 | `vulcan_proof/sim/` | Generate observed and hidden order worlds, including fulfillment truth, latency, evidence behavior, and censoring. |
 | `vulcan_proof/economics.py` | Keep the money table, prevention gain, evidence costs, and resolver economics in pure shared functions. |
