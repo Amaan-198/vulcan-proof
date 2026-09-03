@@ -164,6 +164,7 @@ function App() {
     let active = true;
     let revealTimer;
     setOrderTableReady(false);
+    setSelectedId("");
     Promise.all([
       getJson(`/orders?category=${encodeURIComponent(category)}&limit=${DEMO_ORDER_LIMIT}&plans_only=${plansOnly}&package_ready_only=${packageReadyOnly}`),
       getJson("/demo/script").catch(() => null),
@@ -171,14 +172,12 @@ function App() {
       .then(async ([orderData, script]) => {
         if (!active) return;
         const scriptId = script?.beats?.find((beat) => beat.beat === 1)?.order_id;
-        const preferredId = category === "Electronics" ? scriptId : orderData.orders?.[0]?.order_id;
         let visibleOrders = orderData.orders || [];
         if (category === "Electronics" && scriptId && !visibleOrders.some((order) => order.order_id === scriptId)) {
           const featured = await getJson(`/orders?query=${encodeURIComponent(scriptId)}&limit=1&plans_only=${plansOnly}&package_ready_only=${packageReadyOnly}`);
           visibleOrders = [...(featured.orders || []), ...visibleOrders];
         }
         setOrders(visibleOrders);
-        setSelectedId(preferredId && visibleOrders.some((order) => order.order_id === preferredId) ? preferredId : visibleOrders[0]?.order_id || "");
         setLoading(false);
         revealTimer = window.setTimeout(() => {
           if (active) setOrderTableReady(true);
@@ -640,7 +639,7 @@ function OrderScreen({ category, setCategory, query, setQuery, plansOnly, setPla
 
         <section className="order-summary-column">
           <div className="selected-card panel">
-            <div className="selected-card-top"><span className="selected-label">SELECTED ORDER</span><span className="live-mark"><span />stored</span></div>
+            <div className="selected-card-top"><span className="selected-label">{selectedOrder ? "SELECTED ORDER" : "ORDER DETAILS"}</span>{selectedOrder && <span className="live-mark"><span />stored</span>}</div>
             {selectedOrder ? <div className="selected-order-content" key={selectedOrder.order_id}>
               <div className="order-id-large">{displayOrderId(selectedOrder.order_id)}</div>
               <div className="order-meta-line"><span>{selectedOrder.merchant_id}</span></div>
